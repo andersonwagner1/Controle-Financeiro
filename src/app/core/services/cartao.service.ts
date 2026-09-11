@@ -13,7 +13,7 @@ export class CartaoService {
   listarCartoes(): Observable<Cartao[]> {
     return this.http.get<Cartao[]>(this.apiUrl).pipe(
       tap(cartoes => {
-        console.log("cartoes service:", cartoes);
+        
         this.cartoes$.next(cartoes);
 
       }

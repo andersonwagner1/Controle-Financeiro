@@ -39,6 +39,10 @@ const routes: Routes = [
     path: 'categorias',
     loadChildren: () => import('./features/categorias/categorias.module').then(m => m.CategoriasModule)
   },
+  {
+    path: 'investimentos',
+    loadChildren: () => import('./features/investimentos/investimentos.module').then(m => m.InvestimentosModule)
+  },
   { path: '**', redirectTo: 'dashboard' }
 ];
 

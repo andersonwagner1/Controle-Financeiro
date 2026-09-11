@@ -6,14 +6,7 @@ import { ContaBase } from '../models/conta-base.model';
 @Injectable({ providedIn: 'root' })
 export class ContaBaseService {
   private readonly apiUrl = 'http://localhost:8080/api/contas-base';
-  private contasBase$ = new BehaviorSubject<ContaBase[]>([
-    { id: 'cb-cc', descricao: 'Conta Corrente Padrão', tipo: 'CC' },
-    { id: 'cb-cp', descricao: 'Poupança Padrão', tipo: 'CP' },
-    { id: 'cb-cdb', descricao: 'Investimento CDB', tipo: 'RF' },
-    { id: 'cb-fii', descricao: 'Fundo Imobiliário (FII)', tipo: 'FII' },
-    { id: 'cb-selic', descricao: 'Tesouro Direto SELIC', tipo: 'RF' },
-    { id: 'cb-ipca', descricao: 'Tesouro Direto IPCA+', tipo: 'PREV' }
-  ]);
+  private contasBase$ = new BehaviorSubject<ContaBase[]>([]);
 
   constructor(private http: HttpClient) {
     this.http.get<ContaBase[]>(this.apiUrl).subscribe({ next: contas => this.contasBase$.next(contas), error: () => undefined });

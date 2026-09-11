@@ -1,13 +1,15 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
-import { LancamentoService } from '../../core/services/lancamento.service';
+import { LancamentoService, PaginaLancamentos } from '../../core/services/lancamento.service';
 import { ContaService } from '../../core/services/conta.service';
 import { BancoService } from '../../core/services/banco.service';
 import { Lancamento, CATEGORIAS_CREDITO, CATEGORIAS_DEBITO } from '../../core/models/lancamento.model';
 import { Conta, TIPOS_CONTA } from '../../core/models/conta.model';
 import { Banco } from '../../core/models/banco.model';
 import { CategoriaService } from '../../core/services/categoria.service';
+import { Investimento } from '../../core/models/investimento.model';
+import { InvestimentoService } from '../../core/services/investimento.service';
 
 @Component({
   selector: 'app-lancamentos',
@@ -17,18 +19,23 @@ import { CategoriaService } from '../../core/services/categoria.service';
 export class LancamentosComponent implements OnInit, OnDestroy {
   private subs = new Subscription();
 
-  lancamentos: Lancamento[] = [];
+
   lancamentosFiltrados: Lancamento[] = [];
   contas: Conta[] = [];
   bancos: Banco[] = [];
   tiposConta = TIPOS_CONTA;
   categoriasCredito: string[] = CATEGORIAS_CREDITO.slice();
   categoriasDebito: string[] = CATEGORIAS_DEBITO.slice();
+  investimentos: Investimento[] = [];
 
   filtroTipo = 'todos';
   filtroConta = 'todas';
   filtroCompetencia = new Date().toISOString().substring(0, 7); // YYYY-MM
   categoriasDisponiveis: string[] = [];
+  paginaAtual = 0;
+  totalPaginas = 0;
+  totalLancamentos = 0;
+  readonly tamanhoPagina = 50;
 
   showModal = false;
   tipoModal: 'credito' | 'debito' | 'transferencia' = 'credito';
@@ -42,6 +49,7 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     private contaService: ContaService,
     private bancoService: BancoService,
     private categoriaService: CategoriaService,
+    private investimentoService: InvestimentoService,
     private fb: FormBuilder,
   ) {}
 
@@ -56,21 +64,29 @@ export class LancamentosComponent implements OnInit, OnDestroy {
       this.categoriasDebito = categorias.filter(c => c.tipo === 'D' && c.ativo === 'A').map(c => c.nome);
     }));
 
+    this.subs.add(this.investimentoService.getInvestimentosAtivos().subscribe(investimentos => {
+      this.investimentos = investimentos;
+    }));
+    this.subs.add(this.investimentoService.listarInvestimentos().subscribe({ error: () => undefined }));
+
     this.subs.add(
       this.contaService.getContas().subscribe(c => { this.contas = c; })
     );
     this.subs.add(
       this.lancamentoService.getLancamentos().subscribe(l => {
-        this.lancamentos = l;
+        this.lancamentosFiltrados = l;
         this.aplicarFiltros();
       })
     );
+    this.carregarPagina();
   }
 
   initForm(): void {
     this.form = this.fb.group({
       contaId: ['', Validators.required],
       contaDestinoId: [''], // Only used for transfers
+      aplicacao: [false],
+      investimento: [{ value: '', disabled: true }],
       descricao: ['', [Validators.required, Validators.minLength(2)]],
       categoria: [''], // Will be dynamically validated if not transfer
       valor: [null, [Validators.required, Validators.min(0.01)]],
@@ -87,9 +103,11 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   }
 
   aplicarFiltros(): void {
-    let resultado = [...this.lancamentos];
+    let resultado = [...this.lancamentosFiltrados];
+    
+     this.lancamentosFiltrados = resultado;
 
-    if (this.filtroTipo !== 'todos') {
+   /* if (this.filtroTipo !== 'todos') {
       resultado = resultado.filter(l => l.tipo === this.filtroTipo);
     }
 
@@ -103,7 +121,7 @@ export class LancamentosComponent implements OnInit, OnDestroy {
 
     this.lancamentosFiltrados = resultado.sort(
       (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
-    );
+    );*/
   }
 
   get totalCreditos(): number {
@@ -116,6 +134,10 @@ export class LancamentosComponent implements OnInit, OnDestroy {
       .filter(l => l.tipo === 'debito').reduce((acc, l) => acc + l.valor, 0);
   }
 
+  get periodoConsulta(): { dataInicio: string; dataFim: string } {
+    return this.periodoDaCompetencia();
+  }
+
   abrirModal(tipo: 'credito' | 'debito' | 'transferencia'): void {
     this.isEditando = false;
     this.lancamentoIdEditando = null;
@@ -124,8 +146,11 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     this.form.reset({
       data: new Date().toISOString().split('T')[0],
       competencia: this.filtroCompetencia,
-      contaDestinoId: ''
+      contaDestinoId: '',
+      aplicacao: false,
+      investimento: ''
     });
+    this.alterarAplicacao();
 
     if (tipo === 'transferencia') {
       this.form.get('categoria')?.clearValidators();
@@ -138,6 +163,16 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     this.form.get('contaDestinoId')?.updateValueAndValidity();
 
     this.showModal = true;
+  }
+
+  alterarAplicacao(): void {
+    const investimento = this.form.get('investimento');
+    if (this.form.get('aplicacao')?.value) {
+      investimento?.enable();
+    } else {
+      investimento?.reset('');
+      investimento?.disable();
+    }
   }
 
   editarLancamento(lancamento: Lancamento): void {
@@ -197,7 +232,13 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     if (this.filtroConta !== 'todas' && !this.contasDisponiveis.some(conta => conta.id === this.filtroConta)) {
       this.filtroConta = 'todas';
     }
-    this.aplicarFiltros();
+    this.paginaAtual = 0;
+    this.carregarPagina();
+  }
+
+  alterarConta(): void {
+    this.paginaAtual = 0;
+    this.carregarPagina();
   }
 
   alterarMesCompetencia(offset: number): void {
@@ -205,6 +246,38 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     const novaCompetencia = new Date(ano, mes - 1 + offset, 1);
     this.filtroCompetencia = `${novaCompetencia.getFullYear()}-${String(novaCompetencia.getMonth() + 1).padStart(2, '0')}`;
     this.alterarCompetencia();
+  }
+
+  alterarPagina(offset: number): void {
+    const pagina = this.paginaAtual + offset;
+    if (pagina < 0 || pagina >= this.totalPaginas) return;
+    this.paginaAtual = pagina;
+    this.carregarPagina();
+  }
+
+  private carregarPagina(): void {
+    const { dataInicio, dataFim } = this.periodoDaCompetencia();
+    const contaId = this.filtroConta === 'todas' ? undefined : this.filtroConta;
+    this.subs.add(this.lancamentoService.buscarPagina(dataInicio, dataFim, this.paginaAtual, this.tamanhoPagina, contaId)
+      .subscribe({
+        next: (pagina: Lancamento[]) => {
+          this.lancamentosFiltrados = pagina;
+        },
+        error: () => {
+          //this.lancamentos = [];
+          this.lancamentosFiltrados = [];
+          this.totalPaginas = 0;
+          this.totalLancamentos = 0;
+        }
+      }));
+  }
+
+  private periodoDaCompetencia(): { dataInicio: string; dataFim: string } {
+    const [ano, mes] = this.filtroCompetencia.split('-').map(Number);
+    const inicio = new Date(ano, mes - 1, 1);
+    const fim = new Date(ano, mes, 0);
+    const formatar = (data: Date) => `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+    return { dataInicio: formatar(inicio), dataFim: formatar(fim) };
   }
 
   salvarLancamento(): void {
@@ -219,7 +292,9 @@ export class LancamentosComponent implements OnInit, OnDestroy {
         data: val.data,
         competencia: val.competencia,
         descricao: val.descricao,
+        investimentoId: val.investimentoId || undefined,
       });
+      
       if (!sucesso) {
         this.erroTransferencia = 'Saldo insuficiente ou contas inválidas.';
         return;

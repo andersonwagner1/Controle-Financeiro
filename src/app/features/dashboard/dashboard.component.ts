@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, HostListener } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { ContaService } from '../../core/services/conta.service';
 import { LancamentoService } from '../../core/services/lancamento.service';
@@ -6,9 +6,13 @@ import { BancoService } from '../../core/services/banco.service';
 import { Banco } from '../../core/models/banco.model';
 import { Conta, TIPOS_CONTA } from '../../core/models/conta.model';
 import { Lancamento } from '../../core/models/lancamento.model';
+import { LancamentoCartao } from '../../core/models/lancamento-cartao.model';
 import { DashboardCart } from '../../core/models/dashboard-cart.model';
 import { DashboardService } from '../../core/services/dashboard.service';
+import { LancamentoCartaoService } from '../../core/services/lancamento-cartao.service';
 import { Chart, ChartConfiguration, registerables } from 'chart.js';
+import * as echarts from 'echarts';
+import type { ECharts, EChartsOption } from 'echarts';
 
 Chart.register(...registerables);
 
@@ -34,13 +38,17 @@ interface SankeyFluxo {
 export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('donutChart') donutChartRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('barChart') barChartRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('sankeyChart') sankeyChartRef!: ElementRef<HTMLDivElement>;
 
   private subs = new Subscription();
   private donutChart?: Chart;
   private barChart?: Chart;
+  private sankeyChart?: ECharts;
+  private viewReady = false;
 
   contas: Conta[] = [];
   lancamentos: Lancamento[] = [];
+  lancamentosCartao: LancamentoCartao[] = [];
   bancos: Banco[] = [];
   resumosBanco: ResumoBanco[] = [];
 
@@ -62,6 +70,8 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   anoAtual = new Date().getFullYear();
 
   ultimosLancamentos: Lancamento[] = [];
+  dataInicialSankey = '';
+  dataFinalSankey = '';
 
   get sankeyFluxos(): SankeyFluxo[] {
     const fluxos = new Map<string, SankeyFluxo>();
@@ -131,9 +141,15 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     private lancamentoService: LancamentoService,
     private bancoService: BancoService,
     private dashboardService: DashboardService
+    , private lancamentoCartaoService: LancamentoCartaoService
   ) {}
 
   ngOnInit(): void {
+    const periodo = this.lancamentoService.periodoMesVigente();
+    this.dataInicialSankey = periodo.dataInicio;
+    this.dataFinalSankey = periodo.dataFim;
+    this.carregarLancamentosSankey();
+
     this.subs.add(
       this.dashboardService.getDashboardCart().subscribe({
         next: dashboardCart => {
@@ -160,6 +176,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.contaService.getContas().subscribe(contas => {
         this.contas = contas;
         this.calcularResumos();
+        this.updateSankeyChart();
       })
     );
 
@@ -179,11 +196,20 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
             saldoMes: this.totalCreditos - this.totalDebitos,
           };
         }
+        this.updateSankeyChart();
+      })
+    );
+
+    this.subs.add(
+      this.lancamentoCartaoService.getLancamentos().subscribe(lancamentos => {
+        this.lancamentosCartao = lancamentos;
+        this.updateSankeyChart();
       })
     );
   }
 
   ngAfterViewInit(): void {
+    this.viewReady = true;
     setTimeout(() => this.initCharts(), 200);
   }
 
@@ -218,6 +244,174 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   initCharts(): void {
     this.initDonutChart();
     this.initBarChart();
+    this.updateSankeyChart();
+  }
+
+  private updateSankeyChart(): void {
+    if (!this.viewReady || !this.sankeyChartRef) return;
+
+    const links = this.criarFluxosFinanceiros();
+    const nodes = [...new Set(links.flatMap(link => [link.source, link.target]))]
+      .map(name => ({ name, itemStyle: { color: name.startsWith('Crédito ·') ? '#4ade80' : '#fb7185' } }));
+
+    if (!this.sankeyChart) {
+      this.sankeyChart = echarts.init(this.sankeyChartRef.nativeElement);
+    }
+
+    const option: EChartsOption = {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: '#141e33',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        textStyle: { color: '#f1f5f9' },
+        valueFormatter: value => Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      },
+      series: [{
+        type: 'sankey',
+        data: nodes,
+        links,
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: 16,
+        nodeWidth: 14,
+        nodeGap: 12,
+        draggable: false,
+        layoutIterations: 32,
+        label: { color: 'rgba(241,245,249,0.86)', fontFamily: 'Inter', fontSize: 12 },
+        lineStyle: { color: 'gradient', curveness: 0.5, opacity: 0.38 },
+        emphasis: { focus: 'adjacency' }
+      }]
+    };
+
+    this.sankeyChart.setOption(option, true);
+  }
+
+  private criarFluxosFinanceiros(): Array<{ source: string; target: string; value: number }> {
+    const fluxos = new Map<string, { source: string; target: string; value: number }>();
+    const adicionar = (source: string, target: string, value: number): void => {
+      if (value <= 0) return;
+      const chave = `${source}|${target}`;
+      const fluxo = fluxos.get(chave);
+      if (fluxo) fluxo.value += value;
+      else fluxos.set(chave, { source, target, value });
+    };
+    const contaPorId = new Map(this.contas.map(conta => [conta.id, conta]));
+    const transferencias = this.lancamentos.filter(l => l.transferenciaId && this.estaNoPeriodoSankey(l.data));
+
+    // Transferências entre contas: identifica resgates e novas aplicações automaticamente.
+    transferencias.filter(l => l.tipo === 'debito').forEach(debito => {
+      const credito = transferencias.find(l => l.transferenciaId === debito.transferenciaId && l.tipo === 'credito');
+      const origem = contaPorId.get(debito.contaId);
+      const destino = credito && contaPorId.get(credito.contaId);
+      if (!origem || !destino) return;
+
+      if (!this.ehContaCorrente(origem) && this.ehContaCorrente(destino)) {
+        adicionar(`Resgate · ${origem.descricao}`, 'Conta Corrente', debito.valor);
+      } else if (this.ehContaCorrente(origem) && !this.ehContaCorrente(destino)) {
+        adicionar('Conta Corrente', 'Aplicações e Investimentos', debito.valor);
+      }
+    });
+
+    // Entradas e débitos feitos diretamente na conta corrente.
+    this.lancamentos
+      .filter(l => !l.transferenciaId && l.valor > 0 && this.estaNoPeriodoSankey(l.data))
+      .forEach(lancamento => {
+        const conta = contaPorId.get(lancamento.contaId);
+        if (!conta || !this.ehContaCorrente(conta)) return;
+        const categoria = lancamento.categoria?.trim() || 'Sem categoria';
+        if (lancamento.tipo === 'credito') {
+          adicionar(`Crédito · ${categoria}`, 'Conta Corrente', lancamento.valor);
+        } else if (categoria !== 'Cartão de Crédito') {
+          adicionar('Conta Corrente', `Débito direto · ${categoria}`, lancamento.valor);
+        }
+      });
+
+    // Compras do cartão usam o cartão como intermediário entre a conta e cada categoria final.
+    const comprasCartao = this.lancamentosCartao
+      .filter(l => l.tipo === 'debito' && l.valor > 0 && this.estaNoPeriodoSankey(l.data));
+    const totalComprasCartao = comprasCartao.reduce((total, compra) => total + compra.valor, 0);
+    const pagamentosFatura = this.lancamentos
+      .filter(l => {
+        const conta = contaPorId.get(l.contaId);
+        return l.tipo === 'debito' && !l.transferenciaId && this.ehContaCorrente(conta)
+          && l.categoria === 'Cartão de Crédito' && this.estaNoPeriodoSankey(l.data);
+      })
+      .reduce((total, pagamento) => total + pagamento.valor, 0);
+    const fluxoFatura = totalComprasCartao || pagamentosFatura;
+    if (fluxoFatura > 0) adicionar('Conta Corrente', 'Cartão de Crédito', fluxoFatura);
+    comprasCartao.forEach(compra => {
+      const categoria = compra.categoria?.trim() || 'Sem categoria';
+      adicionar('Cartão de Crédito', `Débito cartão · ${categoria}`, compra.valor);
+    });
+
+    return [...fluxos.values()];
+  }
+
+  private ehContaCorrente(conta?: Conta): boolean {
+    return conta?.tipo === 'CC';
+  }
+
+  private agruparCategorias(tipo: Lancamento['tipo']): Array<{ categoria: string; valor: number }> {
+    const totais = new Map<string, number>();
+    this.lancamentos
+      .filter(l => l.tipo === tipo && !l.transferenciaId && l.valor > 0 && this.estaNoPeriodoSankey(l.data))
+      .forEach(l => {
+        const categoria = l.categoria?.trim() || (tipo === 'credito' ? 'Outros créditos' : 'Outros débitos');
+        totais.set(categoria, (totais.get(categoria) ?? 0) + l.valor);
+      });
+
+    return [...totais.entries()]
+      .map(([categoria, valor]) => ({ categoria, valor }))
+      .sort((a, b) => b.valor - a.valor);
+  }
+
+  atualizarPeriodoSankey(): void {
+    if (this.dataInicialSankey && this.dataFinalSankey) {
+      this.carregarLancamentosSankey();
+    }
+  }
+
+  private carregarLancamentosSankey(): void {
+    this.subs.add(this.lancamentoService.buscarPagina(this.dataInicialSankey, this.dataFinalSankey, 0, 500)
+      .subscribe({ error: () => undefined }));
+    this.subs.add(this.lancamentoCartaoService.buscarPorPeriodo(this.dataInicialSankey, this.dataFinalSankey)
+      .subscribe({ error: () => undefined }));
+  }
+
+  private estaNoPeriodoSankey(data: string): boolean {
+    const dataLancamento = data.slice(0, 10);
+    return (!this.dataInicialSankey || dataLancamento >= this.dataInicialSankey)
+      && (!this.dataFinalSankey || dataLancamento <= this.dataFinalSankey);
+  }
+
+  private criarFluxosCategorias(
+    creditos: Array<{ categoria: string; valor: number }>,
+    debitos: Array<{ categoria: string; valor: number }>
+  ): Array<{ source: string; target: string; value: number }> {
+    const fontes = creditos.map(item => ({ nome: `Crédito · ${item.categoria}`, restante: item.valor }));
+    const destinos = debitos.map(item => ({ nome: `Débito · ${item.categoria}`, restante: item.valor }));
+    const links: Array<{ source: string; target: string; value: number }> = [];
+    let origem = 0;
+    let destino = 0;
+
+    while (origem < fontes.length && destino < destinos.length) {
+      const valor = Math.min(fontes[origem].restante, destinos[destino].restante);
+      if (valor > 0) links.push({ source: fontes[origem].nome, target: destinos[destino].nome, value: valor });
+      fontes[origem].restante -= valor;
+      destinos[destino].restante -= valor;
+      if (fontes[origem].restante < 0.005) origem++;
+      if (destinos[destino].restante < 0.005) destino++;
+    }
+
+    fontes.slice(origem).filter(item => item.restante > 0.005)
+      .forEach(item => links.push({ source: item.nome, target: 'Débito · Saldo disponível', value: item.restante }));
+    destinos.slice(destino).filter(item => item.restante > 0.005)
+      .forEach(item => links.push({ source: 'Crédito · Saldo anterior', target: item.nome, value: item.restante }));
+
+    return links;
   }
 
   initDonutChart(): void {
@@ -383,5 +577,11 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.subs.unsubscribe();
     this.donutChart?.destroy();
     this.barChart?.destroy();
+    this.sankeyChart?.dispose();
+  }
+
+  @HostListener('window:resize')
+  onResize(): void {
+    this.sankeyChart?.resize();
   }
 }

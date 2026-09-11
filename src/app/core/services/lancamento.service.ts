@@ -1,43 +1,64 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { Lancamento } from '../models/lancamento.model';
 import { ContaService } from './conta.service';
+
+export interface PaginaLancamentos {
+  content: Lancamento[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class LancamentoService {
   private readonly apiUrl = 'http://localhost:8080/api/lancamentos';
-  private lancamentos$ = new BehaviorSubject<Lancamento[]>([
-    { id: 'l001', contaId: 'v-nu-cc', tipo: 'credito', descricao: 'Salário Agosto', categoria: 'Salário', valor: 8500.00, data: '2026-08-05', saldoApos: 4250.75 },
-    { id: 'l002', contaId: 'v-nu-cc', tipo: 'debito', descricao: 'Supermercado Extra', categoria: 'Alimentação', valor: 452.30, data: '2026-08-07', saldoApos: 3798.45 },
-    { id: 'l003', contaId: 'v-nu-cc', tipo: 'debito', descricao: 'Conta de Luz', categoria: 'Conta de Luz', valor: 187.60, data: '2026-08-10', saldoApos: 3610.85 },
-    { id: 'l004', contaId: 'v-nu-cc', tipo: 'debito', descricao: 'Aluguel', categoria: 'Moradia', valor: 2100.00, data: '2026-08-10', saldoApos: 1510.85 },
-    { id: 'l005', contaId: 'v-nu-cc', tipo: 'credito', descricao: 'Freelance site', categoria: 'Freelance', valor: 1500.00, data: '2026-08-15', saldoApos: 3010.85 },
-    { id: 'l006', contaId: 'v-nu-cc', tipo: 'debito', descricao: 'Farmácia', categoria: 'Saúde', valor: 89.90, data: '2026-08-18', saldoApos: 2920.95 },
-    { id: 'l007', contaId: 'v-nu-cc', tipo: 'debito', descricao: 'Netflix + Spotify', categoria: 'Lazer', valor: 74.90, data: '2026-08-20', saldoApos: 2846.05 },
-
-    { id: 'l008', contaId: 'v-ita-cc', tipo: 'credito', descricao: '13º Salário parcial', categoria: 'Salário', valor: 4250.00, data: '2026-08-01', saldoApos: 1850.40 },
-    { id: 'l009', contaId: 'v-ita-cc', tipo: 'debito', descricao: 'Cartão de Crédito Itaú', categoria: 'Cartão de Crédito', valor: 3200.00, data: '2026-08-15', saldoApos: -1349.60 },
-
-    { id: 'l010', contaId: 'v-bra-cc', tipo: 'credito', descricao: 'PIX recebido', categoria: 'Transferência Recebida', valor: 500.00, data: '2026-08-05', saldoApos: 620.30 },
-    { id: 'l011', contaId: 'v-bra-cc', tipo: 'debito', descricao: 'Combustível', categoria: 'Transporte', valor: 280.00, data: '2026-08-12', saldoApos: 340.30 },
-
-    { id: 'l012', contaId: 'v-sic-cc', tipo: 'credito', descricao: 'Venda produto', categoria: 'Venda', valor: 1200.00, data: '2026-08-08', saldoApos: 3100.00 },
-    { id: 'l013', contaId: 'v-sic-cc', tipo: 'debito', descricao: 'Internet fibra', categoria: 'Internet', valor: 120.00, data: '2026-08-10', saldoApos: 2980.00 },
-
-    // Rendimentos de investimentos
-    { id: 'l014', contaId: 'v-ita-fii1', tipo: 'credito', descricao: 'Dividendo HGLG11 - Agosto', categoria: 'Dividendo FII', valor: 292.35, data: '2026-08-14', saldoApos: 35800.00 },
-    { id: 'l015', contaId: 'v-ita-fii2', tipo: 'credito', descricao: 'Dividendo MXRF11 - Agosto', categoria: 'Dividendo FII', valor: 172.25, data: '2026-08-14', saldoApos: 18500.00 },
-    { id: 'l016', contaId: 'v-bra-selic', tipo: 'credito', descricao: 'Rendimento SELIC Agosto', categoria: 'Juros CDB', valor: 484.25, data: '2026-09-01', saldoApos: 42000.00 },
-    { id: 'l017', contaId: 'v-nu-cdb', tipo: 'credito', descricao: 'Rendimento CDB Nubank', categoria: 'Juros CDB', valor: 312.50, data: '2026-09-01', saldoApos: 25000.00 },
-  ]);
+  private lancamentos$ = new BehaviorSubject<Lancamento[]>([]);
 
   constructor(private contaService: ContaService, private http: HttpClient) {
-    this.http.get<Lancamento[]>(this.apiUrl).subscribe({ next: lancamentos => this.lancamentos$.next(lancamentos), error: () => undefined });
+    const { dataInicio, dataFim } = this.periodoMesVigente();
+    this.buscarPagina(dataInicio, dataFim).subscribe({ error: () => undefined });
   }
 
   getLancamentos() {
     return this.lancamentos$.asObservable();
+  }
+
+  buscarPagina(dataInicio: string, dataFim: string, page = 0, size = 50, contaId?: string): Observable<Lancamento[]> {
+    if (!dataInicio || !dataFim) {
+      throw new Error('dataInicio e dataFim são obrigatórios para consultar lançamentos.');
+    }
+
+    let params = new HttpParams()
+      .set('dataInicial', dataInicio)
+      .set('dataFinal', dataFim)
+      .set('page', page)
+      .set('size', size)
+      .set('sort', 'data,desc');
+
+    if (contaId) {
+      params = params.set('contaId', contaId);
+    }
+    
+    return this.http.get<Lancamento[]>(this.apiUrl, { params }).pipe(
+      tap(resultado => 
+        {
+          
+          this.lancamentos$.next(resultado);
+          
+  })
+    );
+  }
+
+  periodoMesVigente(dataReferencia = new Date()): { dataInicio: string; dataFim: string } {
+    const ano = dataReferencia.getFullYear();
+    const mes = dataReferencia.getMonth();
+    return {
+      dataInicio: this.formatarData(new Date(ano, mes, 1)),
+      dataFim: this.formatarData(new Date(ano, mes + 1, 0))
+    };
   }
 
   getLancamentosSnapshot(): Lancamento[] {
@@ -162,5 +183,9 @@ export class LancamentoService {
     }});
 
     return true;
+  }
+
+  private formatarData(data: Date): string {
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
   }
 }

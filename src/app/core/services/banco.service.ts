@@ -7,12 +7,7 @@ import { Banco } from '../models/banco.model';
 @Injectable({ providedIn: 'root' })
 export class BancoService {
   private readonly apiUrl = 'http://localhost:8080/api/bancos';
-  private bancos$ = new BehaviorSubject<Banco[]>([
-    { id: 'nubank', nome: 'Nubank', logo: 'Nu', cor: '#820ad1', corSecundaria: '#a855f7' },
-    { id: 'itau', nome: 'Itaú', logo: 'Itaú', cor: '#ec7000', corSecundaria: '#f59e0b' },
-    { id: 'bradesco', nome: 'Bradesco', logo: 'Brad', cor: '#cc092f', corSecundaria: '#f43f5e' },
-    { id: 'sicoob', nome: 'Sicoob', logo: 'Sic', cor: '#006437', corSecundaria: '#22c55e' },
-  ]);
+  private bancos$ = new BehaviorSubject<Banco[]>([  ]);
 
   constructor(private http: HttpClient) {
     this.listarBancos().subscribe({ error: () => undefined });

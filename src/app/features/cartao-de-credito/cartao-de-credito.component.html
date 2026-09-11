@@ -49,7 +49,7 @@
         <label for="cartao">Cartão (banco)</label>
         <select id="cartao" class="filter-select" [(ngModel)]="filtroBanco" (change)="aplicarFiltros()">
           <option value="todos">Todos os cartões</option>
-          <option *ngFor="let banco of bancosDosCartoes" [value]="banco.id">{{ banco.nome }}</option>
+          <option *ngFor="let banco of cartoes" [value]="banco.id">{{ banco.nome }}</option>
         </select>
       </div>
       <span class="closing-note">Ciclo atual: {{ fechamentoAtual | date:'dd/MM/yyyy' }} a {{ proximoFechamento | date:'dd/MM/yyyy' }}</span>

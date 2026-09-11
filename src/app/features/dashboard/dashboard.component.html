@@ -69,7 +69,27 @@
     </div>
   </div>
 
-  <div class="card sankey-card">
+  <div class="card sankey-card sankey-card--echarts">
+    <div class="card-header">
+      <div>
+        <h3>Fluxo por categoria</h3>
+        <span class="card-subtitle">Entradas e resgates → conta corrente e cartão → débitos e aplicações</span>
+      </div>
+      <div class="sankey-filters">
+        <label>
+          <span>Data inicial</span>
+          <input type="date" [(ngModel)]="dataInicialSankey" [max]="dataFinalSankey || null" (change)="atualizarPeriodoSankey()">
+        </label>
+        <label>
+          <span>Data final</span>
+          <input type="date" [(ngModel)]="dataFinalSankey" [min]="dataInicialSankey || null" (change)="atualizarPeriodoSankey()">
+        </label>
+      </div>
+    </div>
+    <div #sankeyChart class="sankey-chart" aria-label="Gráfico Sankey de créditos por categoria para débitos por categoria"></div>
+  </div>
+
+  <div class="card sankey-card sankey-card--legacy">
     <div class="card-header">
       <div>
         <h3>Fluxo financeiro</h3>

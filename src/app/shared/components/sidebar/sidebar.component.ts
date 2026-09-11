@@ -25,6 +25,7 @@ export class SidebarComponent {
     { path: '/contas-base', label: 'Tipos de Conta', icon: 'layers' },
     { path: '/vinculos', label: 'Vínculos', icon: 'link' },
     { path: '/categorias', label: 'Categorias', icon: 'tag' },
+    { path: '/investimentos', label: 'Investimentos', icon: 'chart' },
   ];
 
   constructor(public router: Router) {}

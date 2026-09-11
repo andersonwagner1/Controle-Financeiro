@@ -12,6 +12,7 @@ export interface Lancamento {
   observacao?: string;
   saldoApos?: number;
   transferenciaId?: string;
+  investimentoId?: string;
 }
 
 export const CATEGORIAS_CREDITO = [

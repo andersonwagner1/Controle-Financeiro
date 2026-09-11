@@ -1,0 +1,60 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Cadastros do sistema</p>
+      <h1 class="page-title">Investimentos</h1>
+      <p class="page-subtitle">Cadastre os investimentos disponíveis para os seus lançamentos.</p>
+    </div>
+  </div>
+
+  <div class="content-grid">
+    <section class="card cadastro-card">
+      <h2>{{ investimentoEditando ? 'Editar investimento' : 'Novo investimento' }}</h2>
+      <p class="text-muted">Informe um nome para identificá-lo ao registrar uma aplicação.</p>
+
+      <div class="alert-danger" *ngIf="mensagemErro">{{ mensagemErro }}</div>
+      <div class="alert-success" *ngIf="mensagemSucesso">{{ mensagemSucesso }}</div>
+
+      <form class="cadastro-form" [formGroup]="form" (ngSubmit)="salvar()">
+        <div class="form-group">
+          <label class="form-label" for="investimento-nome">Nome do investimento *</label>
+          <input id="investimento-nome" class="form-control" type="text" formControlName="nome"
+                 placeholder="Ex.: Tesouro Selic 2029" maxlength="100">
+          <small class="error-hint" *ngIf="form.get('nome')?.touched && form.get('nome')?.invalid">
+            Informe um nome com pelo menos 2 caracteres.
+          </small>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" type="button" *ngIf="investimentoEditando" (click)="cancelarEdicao()">Cancelar</button>
+          <button class="btn btn-primary" type="submit" [disabled]="salvando">
+            {{ salvando ? 'Salvando...' : (investimentoEditando ? 'Salvar alterações' : 'Cadastrar investimento') }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card table-card">
+      <div class="table-header">
+        <div><h2>Investimentos cadastrados</h2><span class="text-muted">{{ investimentosAtivos.length }} registro(s)</span></div>
+        <button class="btn btn-ghost btn-sm" type="button" (click)="carregarInvestimentos()" [disabled]="carregando">Atualizar</button>
+      </div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Nome</th><th>ID</th><th style="text-align:right">Ações</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let investimento of investimentosAtivos">
+              <td><strong>{{ investimento.nome }}</strong></td>
+              <td class="text-muted">{{ investimento.id }}</td>
+              <td class="row-actions">
+                <button class="btn btn-ghost btn-sm" type="button" (click)="editar(investimento)">Editar</button>
+                <button class="btn btn-ghost btn-sm danger" type="button" (click)="excluir(investimento)">Excluir</button>
+              </td>
+            </tr>
+            <tr *ngIf="carregando"><td colspan="3" class="empty-state">Carregando investimentos...</td></tr>
+            <tr *ngIf="!carregando && investimentosAtivos.length === 0"><td colspan="3" class="empty-state">Nenhum investimento cadastrado.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>

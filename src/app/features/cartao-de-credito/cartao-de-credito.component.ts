@@ -49,8 +49,8 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const hoje = new Date();
     const inicioCiclo = this.inicioCicloAtual(hoje);
-    this.dataInicial = this.formatarData(inicioCiclo);
-    this.dataFinal = this.formatarData(hoje);
+    this.dataInicial = this.formatarData(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+    this.dataFinal = this.formatarData(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
     this.fechamentoAnterior = this.formatarData(new Date(inicioCiclo.getFullYear(), inicioCiclo.getMonth() - 1, 9));
     this.fechamentoAtual = this.formatarData(inicioCiclo);
     this.proximoFechamento = this.formatarData(new Date(inicioCiclo.getFullYear(), inicioCiclo.getMonth() + 1, 8));
@@ -84,7 +84,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
       next: cartoes => {
         
         this.cartoesApi = cartoes;
-        console.log("lista cartoes:", this.cartoesApi);
+        
         this.atualizarCartoes();
       },
       error: () => { this.erroCadastroCartao = 'Não foi possível carregar os cartões.'; }
@@ -94,6 +94,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
       this.aplicarFiltros();
       this.atualizarCartoes();
     }));
+    this.carregarLancamentosPorPeriodo();
   }
 
   constructor(
@@ -106,9 +107,10 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   ) {}
 
   get cartoesFiltrados(): CartaoResumo[] {
+    
     return this.filtroBanco === 'todos'
       ? this.cartoes
-      : this.cartoes.filter(cartao => cartao.vinculoId === this.filtroBanco);
+      : this.cartoes.filter(cartao => cartao.id === this.filtroBanco);
   }
 
   get bancosDosCartoes(): Banco[] {
@@ -142,6 +144,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   }
 
   get limiteTotal(): number {
+    
     return this.cartoesFiltrados.reduce((total, cartao) => total + cartao.limite, 0);
   }
 
@@ -150,6 +153,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   }
 
   get disponivelTotal(): number {
+    
     return this.limiteTotal - this.utilizadoTotal;
   }
 
@@ -298,17 +302,26 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   }
 
   aplicarFiltros(): void {
-    const contasCartao = this.cartoesApi.filter(cartao => cartao.ativa && this.cartaoEstaAtivo(cartao));
-
-
-    console.log("todosLancamentos:", this.todosLancamentos);
+    //const contasCartao = this.cartoesApi.filter(cartao => cartao.ativa && this.cartaoEstaAtivo(cartao));
 
     this.movimentacoes = this.todosLancamentos
-      .filter(lancamento => contasCartao.some(cartao => cartao.id === lancamento.vinculoId))
-      .filter(lancamento => this.filtroBanco === 'todos' || contasCartao.find(cartao => cartao.id === lancamento.vinculoId)?.vinculoId === this.filtroBanco)
+      //.filter(lancamento => contasCartao.some(cartao => {
+      //    return this.filtroBanco === lancamento.contaId;
+      //  }));
+      //.filter(lancamento => this.filtroBanco === 'todos' || contasCartao.find(cartao => cartao.id === lancamento.contaId)?.vinculoId === this.filtroBanco)
+      .filter(lancamento => this.filtroBanco === 'todos' || lancamento.vinculoId == this.filtroBanco)
       .filter(lancamento => !this.dataInicial || lancamento.data >= this.dataInicial)
       .filter(lancamento => !this.dataFinal || lancamento.data <= this.dataFinal)
       .sort((a, b) => b.data.localeCompare(a.data));
+  }
+
+  alterarPeriodo(): void {
+    this.carregarLancamentosPorPeriodo();
+  }
+
+  private carregarLancamentosPorPeriodo(): void {
+    this.subs.add(this.lancamentoCartaoService.buscarPorPeriodo(this.dataInicial, this.dataFinal)
+      .subscribe({ error: () => undefined }));
   }
 
   private atualizarCartoes(): void {
@@ -342,10 +355,10 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   }
 
   private movimentacoesDoFiltroBanco(): LancamentoCartao[] {
-    return this.todosLancamentos.filter(lancamento => {
-      const cartao = this.cartoesApi.find(item => item.id === lancamento.vinculoId);
-      return !!cartao && cartao.ativa && this.cartaoEstaAtivo(cartao) && (this.filtroBanco === 'todos' || cartao.vinculoId === this.filtroBanco);
+    return this.todosLancamentos.filter(lancamento => {      
+      return lancamento.vinculoId === this.filtroBanco || this.filtroBanco === 'todos';
     });
+
   }
 
   private formatarData(data: Date): string {

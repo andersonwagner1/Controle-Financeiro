@@ -56,7 +56,7 @@
       <div class="summary-icon">#</div>
       <div>
         <div class="summary-label">Lançamentos</div>
-        <div class="summary-val">{{ lancamentosFiltrados.length }}</div>
+        <div class="summary-val">{{ totalLancamentos }}</div>
       </div>
     </div>
   </div>
@@ -71,13 +71,22 @@
     <div style="width:1px;height:20px;background:var(--border);margin:0 0.25rem"></div>
 
     <span class="filter-label">Conta</span>
-    <select class="filter-select" [(ngModel)]="filtroConta" (change)="aplicarFiltros()">
+    <select class="filter-select" [(ngModel)]="filtroConta" (change)="alterarConta()">
       <option value="todas">Todas as contas</option>
-      <optgroup *ngFor="let b of bancos" [label]="b.nome">
+      <!--<optgroup *ngFor="let b of bancos" [label]="b.nome">
         <option *ngFor="let c of getContasDisponiveisPorBanco(b.id)" [value]="c.id">
           {{ tiposConta[c.tipo].icone }} {{ c.descricao }}
         </option>
-      </optgroup>
+      </optgroup>-->
+      <ng-container *ngFor="let b of bancos">
+        <optgroup *ngIf="getContasDisponiveisPorBanco(b.id).length > 0" [label]="b.nome">
+          <option *ngFor="let c of getContasDisponiveisPorBanco(b.id)" [value]="c.id">
+            {{ tiposConta[c.tipo].icone }} {{ c.descricao }}
+          </option>
+        </optgroup>
+      </ng-container>
+
+
     </select>
 
     <div style="width:1px;height:20px;background:var(--border);margin:0 0.25rem"></div>
@@ -86,6 +95,7 @@
     <button type="button" class="btn btn-ghost btn-sm" (click)="alterarMesCompetencia(-1)" title="Competência anterior" aria-label="Competência anterior">‹</button>
     <input class="filter-select" type="month" [(ngModel)]="filtroCompetencia" (change)="alterarCompetencia()">
     <button type="button" class="btn btn-ghost btn-sm" (click)="alterarMesCompetencia(1)" title="Próxima competência" aria-label="Próxima competência">›</button>
+    <span class="periodo-consulta">{{ periodoConsulta.dataInicio | date:'dd/MM/yyyy' }} a {{ periodoConsulta.dataFim | date:'dd/MM/yyyy' }}</span>
   </div>
 
   <!-- Table -->
@@ -152,6 +162,11 @@
       </tbody>
     </table>
     </div>
+    <div class="table-pagination" *ngIf="totalPaginas > 1">
+      <button class="btn btn-ghost btn-sm" (click)="alterarPagina(-1)" [disabled]="paginaAtual === 0">Anterior</button>
+      <span>Página {{ paginaAtual + 1 }} de {{ totalPaginas }}</span>
+      <button class="btn btn-ghost btn-sm" (click)="alterarPagina(1)" [disabled]="paginaAtual + 1 >= totalPaginas">Próxima</button>
+    </div>
   </div>
 </div>
 
@@ -173,12 +188,30 @@
         <div class="form-group">
           <label class="form-label">{{ tipoModal === 'transferencia' ? 'Conta de Origem *' : 'Conta *' }}</label>
           <select class="form-control" formControlName="contaId">
-            <option value="">Selecione...</option>
+
+             <ng-container *ngFor="let b of bancos">
+                  <optgroup *ngIf="getContasDisponiveisPorBanco(b.id).length > 0" [label]="b.nome">
+                  <option *ngFor="let c of getContasDisponiveisPorBanco(b.id)" [value]="c.id">
+                    {{ tiposConta[c.tipo].icone }} {{ c.descricao }} — {{ c.saldo | currencyBr }}
+                  </option>
+                </optgroup>
+              </ng-container>
+            
+              <!--<ng-container *ngFor="let b of bancos">
+                  <optgroup *ngIf="getContasDisponiveisPorBanco(b.id).length > 0" [label]="b.nome">
+                   <option *ngFor="let c of contasDisponiveis | contasByBanco:b.id" [value]="c.id">
+                    {{ tiposConta[c.tipo].icone }} {{ c.descricao }} — {{ c.saldo | currencyBr }}
+                  </option>
+                </optgroup>
+              </ng-container> -->
+
+
+              <!--
             <optgroup *ngFor="let b of bancos" [label]="b.nome">
               <option *ngFor="let c of contasDisponiveis | contasByBanco:b.id" [value]="c.id">
                 {{ tiposConta[c.tipo].icone }} {{ c.descricao }} — {{ c.saldo | currencyBr }}
               </option>
-            </optgroup>
+            </optgroup>-->
           </select>
           <div class="error-hint" *ngIf="tipoModal === 'transferencia' && form.hasError('mesmaConta')">
             Origem e destino devem ser contas diferentes.
@@ -188,13 +221,45 @@
         <div class="form-group" *ngIf="tipoModal === 'transferencia'">
           <label class="form-label">Conta de Destino *</label>
           <select class="form-control" formControlName="contaDestinoId">
-            <option value="">Selecione...</option>
+               <ng-container *ngFor="let b of bancos">
+                  <optgroup *ngIf="getContasDisponiveisPorBanco(b.id).length > 0" [label]="b.nome">
+                  <option *ngFor="let c of getContasDisponiveisPorBanco(b.id)" [value]="c.id">
+                    {{ tiposConta[c.tipo].icone }} {{ c.descricao }} — {{ c.saldo | currencyBr }}
+                  </option>
+                </optgroup>
+              </ng-container>
+
+
+            <!--
             <optgroup *ngFor="let b of bancos" [label]="b.nome">
               <option *ngFor="let c of contasDisponiveis | contasByBanco:b.id" [value]="c.id" [disabled]="c.id === form.get('contaId')?.value">
                 {{ tiposConta[c.tipo].icone }} {{ c.descricao }}
               </option>
-            </optgroup>
+            </optgroup>-->
           </select>
+        </div>
+
+        <div class="form-group" *ngIf="tipoModal === 'transferencia'">
+          <label class="checkbox-label">
+            <input type="checkbox" formControlName="aplicacao" (change)="alterarAplicacao()" />
+            <span>APLICAÇÃO/RESGATE</span>
+          </label>
+        </div>
+
+        <div class="form-group" *ngIf="tipoModal === 'transferencia'">
+          <label class="form-label">Investimento</label>
+          <select class="form-control" formControlName="investimento">
+
+
+
+            <option value="">Selecione o investimento...</option>
+            <option *ngFor="let investimento of investimentos" [value]="investimento.id">
+              {{ investimento.nome }}
+            </option>
+          </select>
+          <small class="form-hint" *ngIf="!form.get('aplicacao')?.value">
+            Marque “APLICAÇÃO/RESGATE” para selecionar um investimento.
+          </small>
         </div>
 
         <div class="form-group">
@@ -211,10 +276,12 @@
             <label class="form-label">Data *</label>
             <input class="form-control" type="date" formControlName="data" />
           </div>
+         <!-- 
           <div class="form-group" style="flex:1">
             <label class="form-label">Competência *</label>
             <input class="form-control" type="month" formControlName="competencia" />
           </div>
+          -->
         </div>
 
         <div class="alert-danger" *ngIf="tipoModal === 'transferencia' && erroTransferencia">
