@@ -1,7 +1,7 @@
 export interface Vinculo {
-  id: string;
-  bancoId: string;
-  contaBaseId: string;
+  id: number;
+  bancoId: number;
+  contaBaseId: number;
   descricao?: string;
   saldo: number;
   dataInicio: string;

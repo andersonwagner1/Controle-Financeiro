@@ -43,6 +43,7 @@ export class ContasComponent implements OnInit, OnDestroy {
 
     this.subs.add(
       this.contaService.getContas().subscribe(contas => {
+        console.log(contas);
         this.contas = contas;
         this.aplicarFiltros();
       })
@@ -70,7 +71,7 @@ export class ContasComponent implements OnInit, OnDestroy {
     }
 
     if (this.filtroBanco !== 'todos') {
-      resultado = resultado.filter(c => c.bancoId === this.filtroBanco);
+      resultado = resultado.filter(c => c.bancoId + "" === this.filtroBanco);
     }
 
     if (this.filtroTipo !== 'todos') {
@@ -90,7 +91,7 @@ export class ContasComponent implements OnInit, OnDestroy {
     return this.contasFiltradas.reduce((acc, c) => acc + c.saldo, 0);
   }
 
-  getBanco(id: string): Banco | undefined {
+  getBanco(id?: number): Banco | undefined {
     return this.bancos.find(b => b.id === id);
   }
 
@@ -111,7 +112,7 @@ export class ContasComponent implements OnInit, OnDestroy {
     if (this.form.invalid) return;
     const val = this.form.value;
     const novaConta: Conta = {
-      id: `${val.bancoId}-${val.tipo.toLowerCase()}-${Date.now()}`,
+
       bancoId: val.bancoId,
       tipo: val.tipo,
       descricao: val.descricao,

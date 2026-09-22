@@ -1,6 +1,6 @@
 export interface Cartao {
-  id: string;
-  vinculoId: string;
+  id: number;
+  vinculoId: number;
   nome: string;
   limite: number;
   diaFechamento: number;
@@ -10,4 +10,4 @@ export interface Cartao {
   ativa: boolean;
 }
 
-export type CartaoInput = Omit<Cartao, 'id'> & { id?: string };
+export type CartaoInput = Omit<Cartao, 'id'> & { id?: number };

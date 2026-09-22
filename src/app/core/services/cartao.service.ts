@@ -22,7 +22,7 @@ export class CartaoService {
     );
   }
 
-  consultarCartao(id: string): Observable<Cartao> {
+  consultarCartao(id: number): Observable<Cartao> {
     return this.http.get<Cartao>(`${this.apiUrl}/${id}`);
   }
 
@@ -32,7 +32,7 @@ export class CartaoService {
     );
   }
 
-  atualizarCartao(id: string, cartao: CartaoInput): Observable<Cartao> {
+  atualizarCartao(id: number, cartao: CartaoInput): Observable<Cartao> {
     return this.http.put<Cartao>(`${this.apiUrl}/${id}`, { ...cartao, id }).pipe(
       tap(atualizado => this.cartoes$.next(
         this.cartoes$.getValue().map(item => item.id === atualizado.id ? atualizado : item)

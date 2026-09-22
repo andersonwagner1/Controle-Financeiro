@@ -127,7 +127,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   nomeConta(conta: Conta): string {
-    return conta.tipo === 'CC' ? 'Conta Corrente · ' + this.getBancoNome(conta.id) : this.getBancoNome(conta.id) + ' · ' + conta.descricao;
+    return conta.tipo === 'CC' ? 'Conta Corrente · ' + this.getBancoNome(conta.bancoId) : this.getBancoNome(conta?.id) + ' · ' + conta.descricao;
   }
 
   tiposConta = TIPOS_CONTA;
@@ -302,10 +302,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     const transferencias = this.lancamentos.filter(l => l.transferenciaId && this.estaNoPeriodoSankey(l.data));
 
     // Transferências entre contas: identifica resgates e novas aplicações automaticamente.
-    transferencias.filter(l => l.tipo === 'debito').forEach(debito => {
-      const credito = transferencias.find(l => l.transferenciaId === debito.transferenciaId && l.tipo === 'credito');
-      const origem = contaPorId.get(debito.contaId);
-      const destino = credito && contaPorId.get(credito.contaId);
+    transferencias.filter(l => l.tipo === 'DEBITO').forEach(debito => {
+      const credito = transferencias.find(l => l.transferenciaId === debito.transferenciaId && l.tipo === 'CREDITO');
+      const origem = contaPorId.get(debito.bancoContaId);
+      const destino = credito && contaPorId.get(credito.bancoContaId);
       if (!origem || !destino) return;
 
       if (!this.ehContaCorrente(origem) && this.ehContaCorrente(destino)) {
@@ -319,10 +319,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lancamentos
       .filter(l => !l.transferenciaId && l.valor > 0 && this.estaNoPeriodoSankey(l.data))
       .forEach(lancamento => {
-        const conta = contaPorId.get(lancamento.contaId);
+        const conta = contaPorId.get(lancamento.bancoContaId);
         if (!conta || !this.ehContaCorrente(conta)) return;
         const categoria = lancamento.categoria?.trim() || 'Sem categoria';
-        if (lancamento.tipo === 'credito') {
+        if (lancamento.tipo === 'CREDITO') {
           adicionar(`Crédito · ${categoria}`, 'Conta Corrente', lancamento.valor);
         } else if (categoria !== 'Cartão de Crédito') {
           adicionar('Conta Corrente', `Débito direto · ${categoria}`, lancamento.valor);
@@ -335,8 +335,8 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     const totalComprasCartao = comprasCartao.reduce((total, compra) => total + compra.valor, 0);
     const pagamentosFatura = this.lancamentos
       .filter(l => {
-        const conta = contaPorId.get(l.contaId);
-        return l.tipo === 'debito' && !l.transferenciaId && this.ehContaCorrente(conta)
+        const conta = contaPorId.get(l.bancoContaId);
+        return l.tipo === 'DEBITO' && !l.transferenciaId && this.ehContaCorrente(conta)
           && l.categoria === 'Cartão de Crédito' && this.estaNoPeriodoSankey(l.data);
       })
       .reduce((total, pagamento) => total + pagamento.valor, 0);
@@ -359,7 +359,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lancamentos
       .filter(l => l.tipo === tipo && !l.transferenciaId && l.valor > 0 && this.estaNoPeriodoSankey(l.data))
       .forEach(l => {
-        const categoria = l.categoria?.trim() || (tipo === 'credito' ? 'Outros créditos' : 'Outros débitos');
+        const categoria = l.categoria?.trim() || (tipo === 'CREDITO' ? 'Outros créditos' : 'Outros débitos');
         totais.set(categoria, (totais.get(categoria) ?? 0) + l.valor);
       });
 
@@ -561,12 +561,12 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  getContaNome(contaId: string): string {
+  getContaNome(contaId: number): string {
     const conta = this.contas.find(c => c.id === contaId);
-    return conta ? conta.descricao : contaId;
+    return conta ? conta.descricao : contaId + "-";
   }
 
-  getBancoNome(contaId: string): string {
+  getBancoNome(contaId?: number): string {
     const conta = this.contas.find(c => c.id === contaId);
     if (!conta) return '';
     const banco = this.bancos.find(b => b.id === conta.bancoId);

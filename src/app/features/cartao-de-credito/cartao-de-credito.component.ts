@@ -41,7 +41,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   showModal = false;
   showCadastroCartao = false;
   isEditandoCartao = false;
-  cartaoIdEditando: string | null = null;
+  cartaoIdEditando: number | null = null;
   erroCadastroCartao = '';
   cadastroCartaoForm!: FormGroup;
   form!: FormGroup;
@@ -110,7 +110,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
     
     return this.filtroBanco === 'todos'
       ? this.cartoes
-      : this.cartoes.filter(cartao => cartao.id === this.filtroBanco);
+      : this.cartoes.filter(cartao => cartao.id === Number(this.filtroBanco));
   }
 
   get bancosDosCartoes(): Banco[] {
@@ -220,7 +220,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
 
 
     const cartao: Cartao = {
-      id: this.cartaoIdEditando || `${valor.bancoId}-cc-${Date.now()}`,
+      id: this.cartaoIdEditando!,
       vinculoId: valor.bancoId,
       nome: valor.descricao.trim(),
       ativa: true,
@@ -296,9 +296,9 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
     });
   }
 
-  getBancoNome(cartaoId: string): string {
-    const cartao = this.cartoesApi.find(item => item.id === cartaoId);
-    return this.bancos.find(b => b.id === cartao?.vinculoId)?.nome || 'Banco não informado';
+  getBancoNome(cartaoId?: number): string {
+    const cartao = this.cartoesApi.find(item => item.id === Number(cartaoId));
+    return this.bancos.find(b => b.id === Number(cartao?.vinculoId))?.nome || 'Banco não informado';
   }
 
   aplicarFiltros(): void {
@@ -309,7 +309,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
       //    return this.filtroBanco === lancamento.contaId;
       //  }));
       //.filter(lancamento => this.filtroBanco === 'todos' || contasCartao.find(cartao => cartao.id === lancamento.contaId)?.vinculoId === this.filtroBanco)
-      .filter(lancamento => this.filtroBanco === 'todos' || lancamento.vinculoId == this.filtroBanco)
+      .filter(lancamento => this.filtroBanco === 'todos' || lancamento.vinculoId == Number(this.filtroBanco))
       .filter(lancamento => !this.dataInicial || lancamento.data >= this.dataInicial)
       .filter(lancamento => !this.dataFinal || lancamento.data <= this.dataFinal)
       .sort((a, b) => b.data.localeCompare(a.data));
@@ -327,15 +327,15 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   private atualizarCartoes(): void {
     const contasCartao = this.cartoesApi.filter(cartao => this.cartaoEstaAtivo(cartao));
     
-    this.cartoes = contasCartao.map((cartao, index) => {
-      const banco = this.bancos.find(item => item.id === cartao.vinculoId) || {
+    /*this.cartoes = contasCartao.map((cartao, index) => {
+      const banco = this.bancos.find(item => item.id === Number(cartao.vinculoId)) || {
         id: '', nome: 'Banco não informado', logo: '', cor: '#6366f1', corSecundaria: '#8b5cf6'
       };
       const utilizado = this.todosLancamentos
         .filter(l => l.vinculoId === cartao.id && l.tipo === 'debito' && l.data >= this.dataInicial)
         .reduce((total, l) => total + l.valor, 0);
       return { ...cartao, banco, limite: cartao.limite || 5000 + index * 2500, utilizado };
-    });
+    });*/
   }
 
   private cartaoEstaAtivo(conta: Pick<Cartao, 'dataAbertura' | 'dataFechamento'>): boolean {
@@ -356,7 +356,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
 
   private movimentacoesDoFiltroBanco(): LancamentoCartao[] {
     return this.todosLancamentos.filter(lancamento => {      
-      return lancamento.vinculoId === this.filtroBanco || this.filtroBanco === 'todos';
+      return lancamento.vinculoId === Number(this.filtroBanco) || this.filtroBanco === 'todos';
     });
 
   }

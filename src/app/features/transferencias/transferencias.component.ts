@@ -110,21 +110,21 @@ export class TransferenciasComponent implements OnInit, OnDestroy {
     }
   }
 
-  getContaNome(id: string): string {
-    return this.contas.find(c => c.id === id)?.descricao ?? id;
+  getContaNome(id: number): string {
+    return this.contas.find(c => c.id === id)?.descricao ?? id + "-";
   }
 
-  getBancoNome(contaId: string): string {
+  getBancoNome(contaId: number): string {
     const conta = this.contas.find(c => c.id === contaId);
     if (!conta) return '';
     return this.bancos.find(b => b.id === conta.bancoId)?.nome ?? '';
   }
 
-  getContaTipo(id: string): string {
+  getContaTipo(id: number): string {
     return this.contas.find(c => c.id === id)?.tipo ?? '';
   }
 
-  getBancoCor(contaId: string): string {
+  getBancoCor(contaId: number): string {
     const conta = this.contas.find(c => c.id === contaId);
     if (!conta) return '#888';
     return this.bancos.find(b => b.id === conta.bancoId)?.cor ?? '#888';

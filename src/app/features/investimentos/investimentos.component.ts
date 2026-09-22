@@ -1,7 +1,9 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { Investimento } from '../../core/models/investimento.model';
+import { InvestimentoContaVinculada } from '../../core/models/investimento-conta-vinculada.model';
 import { InvestimentoService } from '../../core/services/investimento.service';
 
 @Component({
@@ -12,10 +14,12 @@ import { InvestimentoService } from '../../core/services/investimento.service';
 export class InvestimentosComponent implements OnInit, OnDestroy {
   private readonly subs = new Subscription();
 
+  contasVinculadas: InvestimentoContaVinculada[] = [];
   investimentos: Investimento[] = [];
   investimentoEditando: Investimento | null = null;
   form!: FormGroup;
   carregando = true;
+  carregandoContas = true;
   salvando = false;
   mensagemErro = '';
   mensagemSucesso = '';
@@ -27,13 +31,39 @@ export class InvestimentosComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.form = this.fb.group({
-      nome: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]]
+      nome: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
+      contaId: ['', Validators.required]
     });
+
+
+
 
     this.subs.add(this.investimentoService.getInvestimentos().subscribe(investimentos => {
       this.investimentos = investimentos;
     }));
+    
+    
     this.carregarInvestimentos();
+    this.listarBancosContas();
+  }
+
+
+  
+
+  listarBancosContas(): void {
+    this.carregandoContas = true;
+    /*this.subs.add(this.investimentoService.listarContasVinculadas().subscribe({
+      next: contas => {
+        
+        this.contasVinculadas = contas;
+        this.carregandoContas = false;
+      },
+      error: () => {
+        this.contasVinculadas = [];
+        this.carregandoContas = false;
+        this.mensagemErro = 'Não foi possível carregar os bancos e contas vinculados.';
+      }
+    }));*/
   }
 
   carregarInvestimentos(): void {
@@ -41,9 +71,9 @@ export class InvestimentosComponent implements OnInit, OnDestroy {
     this.mensagemErro = '';
     this.subs.add(this.investimentoService.listarInvestimentos().subscribe({
       next: () => this.carregando = false,
-      error: () => {
+      error: (erro: HttpErrorResponse) => {
         this.carregando = false;
-        this.mensagemErro = 'Não foi possível carregar os investimentos.';
+        this.mensagemErro = this.obterMensagemErro(erro, 'Não foi possível carregar os investimentos.');
       }
     }));
   }
@@ -57,12 +87,14 @@ export class InvestimentosComponent implements OnInit, OnDestroy {
     this.salvando = true;
     this.mensagemErro = '';
     this.mensagemSucesso = '';
+    const valor = this.form.getRawValue();
     const requisicao = this.investimentoEditando
       ? this.investimentoService.atualizarInvestimento({
           ...this.investimentoEditando,
-          nome: this.form.value.nome.trim()
+          nome: valor.nome.trim(),
+          contaId: valor.contaId
         })
-      : this.investimentoService.adicionarInvestimento(this.form.value.nome);
+      : this.investimentoService.adicionarInvestimento(valor.nome, valor.contaId);
 
     this.subs.add(requisicao.subscribe({
       next: () => {
@@ -72,23 +104,32 @@ export class InvestimentosComponent implements OnInit, OnDestroy {
           : 'Investimento cadastrado com sucesso.';
         this.cancelarEdicao();
       },
-      error: () => {
+      error: (erro: HttpErrorResponse) => {
         this.salvando = false;
-        this.mensagemErro = 'Não foi possível cadastrar o investimento.';
+        this.mensagemErro = this.obterMensagemErro(
+          erro,
+          this.investimentoEditando
+            ? 'Não foi possível atualizar o investimento.'
+            : 'Não foi possível cadastrar o investimento.'
+        );
       }
     }));
   }
 
   editar(investimento: Investimento): void {
     this.investimentoEditando = investimento;
-    this.form.reset({ nome: investimento.nome });
+    this.form.reset({ nome: investimento.nome, contaId: investimento.contaId || '' });
     this.mensagemErro = '';
     this.mensagemSucesso = '';
   }
 
   cancelarEdicao(): void {
     this.investimentoEditando = null;
-    this.form.reset();
+    this.form.reset({ nome: '', contaId: '' });
+  }
+
+  getContaVinculada(contaId: number): InvestimentoContaVinculada | undefined {
+    return this.contasVinculadas.find(conta => conta.contaId === contaId);
   }
 
   excluir(investimento: Investimento): void {
@@ -101,8 +142,18 @@ export class InvestimentosComponent implements OnInit, OnDestroy {
         this.mensagemSucesso = 'Investimento excluído com sucesso.';
         if (this.investimentoEditando?.id === investimento.id) this.cancelarEdicao();
       },
-      error: () => this.mensagemErro = 'Não foi possível excluir o investimento.'
+      error: (erro: HttpErrorResponse) => {
+        this.mensagemErro = this.obterMensagemErro(erro, 'Não foi possível excluir o investimento.');
+      }
     }));
+  }
+
+  private obterMensagemErro(erro: HttpErrorResponse, mensagemPadrao: string): string {
+    const mensagem = typeof erro.error === 'string'
+      ? erro.error
+      : erro.error?.message || erro.error?.mensagem;
+
+    return mensagem || mensagemPadrao;
   }
 
   get investimentosAtivos(): Investimento[] {

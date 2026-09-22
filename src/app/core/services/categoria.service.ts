@@ -24,11 +24,10 @@ export class CategoriaService {
   }
 
   adicionarCategoria(nome: string, tipo: TipoCategoria): void {
-    const categoria: Categoria = {
-      id: `cat-${Date.now()}`,
+    const categoria: Categoria = {      
       nome: nome.trim(),
       tipo,
-      ativo: 'A'
+      ativo: 'SIM'
     };
     this.http.post<Categoria>(this.apiUrl, categoria).subscribe({ next: salvo => this.atualizar([...this.getCategoriasSnapshot(), salvo]) });
   }
@@ -38,11 +37,11 @@ export class CategoriaService {
     this.http.put<Categoria>(`${this.apiUrl}/${categoria.id}`, atualizada).subscribe({ next: salvo => this.atualizar(this.getCategoriasSnapshot().map(item => item.id === salvo.id ? salvo : item)) });
   }
 
-  alterarStatus(id: string, ativo: StatusCategoria): void {
+  alterarStatus(id: number, ativo: StatusCategoria): void {
     this.http.patch<Categoria>(`${this.apiUrl}/${id}/status?ativo=${ativo}`, {}).subscribe({ next: salvo => this.atualizar(this.getCategoriasSnapshot().map(item => item.id === salvo.id ? salvo : item)) });
   }
 
-  removerCategoria(id: string): void {
+  removerCategoria(id: number): void {
     this.http.delete(`${this.apiUrl}/${id}`).subscribe({ next: () => this.atualizar(this.getCategoriasSnapshot().filter(item => item.id !== id)) });
   }
 
@@ -62,10 +61,10 @@ export class CategoriaService {
     }
 
     return [
-      ...CATEGORIAS_CREDITO.map((nome, index) => ({ id: `cat-c-${index}`, nome, tipo: 'C' as TipoCategoria, ativo: 'A' as StatusCategoria })),
-      ...CATEGORIAS_DEBITO.filter(nome => nome !== 'Transferência Enviada').map((nome, index) => ({ id: `cat-d-${index}`, nome, tipo: 'D' as TipoCategoria, ativo: 'A' as StatusCategoria })),
-      { id: 'cat-t-0', nome: 'Transferência Enviada', tipo: 'T' as TipoCategoria, ativo: 'A' as StatusCategoria },
-      { id: 'cat-t-1', nome: 'Transferência Recebida', tipo: 'T' as TipoCategoria, ativo: 'A' as StatusCategoria }
+      //...CATEGORIAS_CREDITO.map((nome, index) => ({ id: `${index}`, nome, tipo: 'CREDITO' as TipoCategoria, ativo: 'A' as StatusCategoria })),
+      //...CATEGORIAS_DEBITO.filter(nome => nome !== 'Transferência Enviada').map((nome, index) => ({ id: `cat-d-${index}`, nome, tipo: 'D' as TipoCategoria, ativo: 'A' as StatusCategoria })),
+      //{ id: 'cat-t-0', nome: 'Transferência Enviada', tipo: 'T' as TipoCategoria, ativo: 'A' as StatusCategoria },
+      //{ id: 'cat-t-1', nome: 'Transferência Recebida', tipo: 'T' as TipoCategoria, ativo: 'A' as StatusCategoria }
     ];
   }
 }

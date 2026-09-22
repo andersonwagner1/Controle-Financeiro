@@ -1,5 +1,5 @@
 export interface Banco {
-  id: string;
+  id: number;
   nome: string;
   logo: string;
   cor: string;

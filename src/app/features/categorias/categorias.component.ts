@@ -17,7 +17,7 @@ export class CategoriasComponent implements OnInit, OnDestroy {
   showModal = false;
   editando: Categoria | null = null;
   filtroTipo: TipoCategoria | 'todos' = 'todos';
-  filtroStatus: StatusCategoria | 'todos' = 'A';
+  filtroStatus: StatusCategoria | 'todos' = 'SIM';
   tipos = TIPOS_CATEGORIA;
   status = STATUS_CATEGORIA;
 
@@ -63,12 +63,12 @@ export class CategoriasComponent implements OnInit, OnDestroy {
   }
 
   alternarStatus(categoria: Categoria): void {
-    this.categoriaService.alterarStatus(categoria.id, categoria.ativo === 'A' ? 'I' : 'A');
+    this.categoriaService.alterarStatus(categoria.id!, categoria.ativo === 'SIM' ? 'NAO' : 'SIM');
   }
 
   excluir(categoria: Categoria): void {
     if (confirm(`Excluir a categoria "${categoria.nome}"?`)) {
-      this.categoriaService.removerCategoria(categoria.id);
+      this.categoriaService.removerCategoria(categoria.id!);
     }
   }
 

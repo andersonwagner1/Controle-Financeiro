@@ -20,7 +20,7 @@ export class ContaBaseService {
     return this.contasBase$.getValue();
   }
 
-  getContaBaseById(id: string): ContaBase | undefined {
+  getContaBaseById(id: number): ContaBase | undefined {
     return this.contasBase$.getValue().find(c => c.id === id);
   }
 

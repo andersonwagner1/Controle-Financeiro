@@ -15,8 +15,8 @@ export const TIPOS_CONTA: Record<TipoConta, { label: string; categoria: 'bancari
 };
 
 export interface Conta {
-  id: string;
-  bancoId: string;
+  id?: number; // Opcional
+  bancoId?: number;
   tipo: TipoConta;
   descricao: string;
   saldo: number;

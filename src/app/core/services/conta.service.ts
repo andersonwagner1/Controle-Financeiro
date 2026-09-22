@@ -41,7 +41,13 @@ export class ContaService {
 
   getContasSnapshot(): Conta[] {
     const vinculos = this.vinculoService.getVinculosSnapshot();
+
+    console.log(vinculos);
+
+
     const contasBase = this.contaBaseService.getContasBaseSnapshot();
+
+    
     return vinculos.map(v => {
       const cb = contasBase.find(c => c.id === v.contaBaseId);
       return {
@@ -62,11 +68,11 @@ export class ContaService {
     });
   }
 
-  getContaById(id: string): Conta | undefined {
+  getContaById(id: number): Conta | undefined {
     return this.getContasSnapshot().find(c => c.id === id);
   }
 
-  getContasByBanco(bancoId: string): Conta[] {
+  getContasByBanco(bancoId: number): Conta[] {
     return this.getContasSnapshot().filter(c => c.bancoId === bancoId);
   }
 
@@ -74,7 +80,7 @@ export class ContaService {
     return this.getContasSnapshot().filter(c => c.tipo === tipo);
   }
 
-  atualizarSaldo(contaId: string, novoSaldo: number): void {
+  atualizarSaldo(contaId: number, novoSaldo: number): void {
     // contaId é na verdade o vinculoId nesta refatoração
     this.vinculoService.atualizarSaldo(contaId, novoSaldo);
   }
@@ -89,8 +95,8 @@ export class ContaService {
     }
 
     this.vinculoService.adicionarVinculo({
-      id: conta.id,
-      bancoId: conta.bancoId,
+      id: conta.id!,
+      bancoId: conta.bancoId!,
       contaBaseId: cb.id,
       saldo: conta.saldo,
       dataInicio: conta.dataAbertura,
@@ -105,12 +111,12 @@ export class ContaService {
   }
 
   atualizarConta(conta: Conta): void {
-    const vinculo = this.vinculoService.getVinculoById(conta.id);
+    const vinculo = this.vinculoService.getVinculoById(conta.id!);
     if (!vinculo) return;
 
     this.vinculoService.atualizarVinculo({
       ...vinculo,
-      bancoId: conta.bancoId,
+      bancoId: conta.bancoId!,
       descricao: conta.descricao,
       saldo: conta.saldo,
       dataInicio: conta.dataAbertura,

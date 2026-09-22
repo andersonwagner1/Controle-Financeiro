@@ -185,18 +185,20 @@
         <tbody>
           <tr *ngFor="let l of ultimosLancamentos">
             <td class="text-muted">{{ l.data | date:'dd/MM/yyyy' }}</td>
-            <td>{{ l.descricao }}</td>
-            <td class="text-secondary">{{ getContaNome(l.contaId) }}</td>
-            <td class="text-secondary">{{ getBancoNome(l.contaId) }}</td>
+            <td>{{ l.observacao }}</td>
+            <td class="text-secondary">{{ getContaNome(l.bancoContaId) }}</td>
+            <td class="text-secondary">{{ getBancoNome(l.bancoContaId) }}</td>
             <td><span class="categoria-chip">{{ l.categoria }}</span></td>
             <td>
-              <span class="tipo-badge" [class.credito]="l.tipo === 'credito'" [class.debito]="l.tipo === 'debito'">
-                {{ l.tipo === 'credito' ? '▲ Crédito' : '▼ Débito' }}
+              <td style="text-align:right">
+              <span [class.text-success]="l.tipo === 'CREDITO'" [class.text-danger]="l.tipo === 'CREDITO'">
+                {{ l.tipo === 'CREDITO' ? '+' : '-' }}{{ l.valor | currencyBr }}
               </span>
             </td>
+
             <td style="text-align:right">
-              <span [class.text-success]="l.tipo === 'credito'" [class.text-danger]="l.tipo === 'debito'">
-                {{ l.tipo === 'credito' ? '+' : '-' }}{{ l.valor | currencyBr }}
+              <span [class.text-success]="l.tipo === 'DEBITO'" [class.text-danger]="l.tipo === 'DEBITO'">
+                {{ l.tipo === 'DEBITO' ? '+' : '-' }}{{ l.valor | currencyBr }}
               </span>
             </td>
           </tr>

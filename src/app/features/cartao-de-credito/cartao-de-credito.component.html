@@ -26,7 +26,7 @@
     <div class="cards-grid">
       <article class="credit-card" *ngFor="let cartao of cartoes; let indice = index" [class.teal]="indice % 2 === 1">
         <div class="credit-card-top"><span class="card-chip"></span><span class="card-brand">{{ cartao.banco.nome | uppercase }}</span></div>
-        <p class="card-number">•••• •••• •••• {{ cartao.id.slice(-4) }}</p>
+        <p class="card-number">•••• •••• ••••</p>
         <div class="credit-card-bottom">
           <div><span class="card-caption">Cartão</span><strong>{{ cartao.nome }}</strong></div>
           <div class="card-due"><span class="card-caption">Fecha / vence</span><strong>{{ cartao.diaFechamento || 8 }} / {{ cartao.diaVencimento || 15 }}</strong></div>

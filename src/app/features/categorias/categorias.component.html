@@ -16,9 +16,9 @@
   <div class="filter-bar">
     <span class="filter-label">Tipo</span>
     <button class="filter-chip" [class.active]="filtroTipo === 'todos'" (click)="filtroTipo = 'todos'; aplicarFiltros()">Todos</button>
-    <button class="filter-chip" [class.active]="filtroTipo === 'C'" (click)="filtroTipo = 'C'; aplicarFiltros()">Crédito</button>
-    <button class="filter-chip" [class.active]="filtroTipo === 'D'" (click)="filtroTipo = 'D'; aplicarFiltros()">Débito</button>
-    <button class="filter-chip" [class.active]="filtroTipo === 'T'" (click)="filtroTipo = 'T'; aplicarFiltros()">Transferência</button>
+    <button class="filter-chip" [class.active]="filtroTipo === 'CREDITO'" (click)="filtroTipo = 'CREDITO'; aplicarFiltros()">Crédito</button>
+    <button class="filter-chip" [class.active]="filtroTipo === 'DEBITO'" (click)="filtroTipo = 'DEBITO'; aplicarFiltros()">Débito</button>
+    <button class="filter-chip" [class.active]="filtroTipo === 'TODOS'" (click)="filtroTipo = 'TODOS'; aplicarFiltros()">Transferência</button>
     <span class="filter-separator"></span>
     <span class="filter-label">Status</span>
     <select class="filter-select" [(ngModel)]="filtroStatus" (change)="aplicarFiltros()">
@@ -30,9 +30,9 @@
 
   <div class="summary-grid">
     <div class="summary-card"><span>Registros exibidos</span><strong>{{ categoriasFiltradas.length }}</strong></div>
-    <div class="summary-card"><span>Créditos ativos</span><strong>{{ getTotal('C', 'A') }}</strong></div>
-    <div class="summary-card"><span>Débitos ativos</span><strong>{{ getTotal('D', 'A') }}</strong></div>
-    <div class="summary-card"><span>Transferências</span><strong>{{ getTotal('T', 'A') }}</strong></div>
+    <div class="summary-card"><span>Créditos ativos</span><strong>{{ getTotal('CREDITO', 'SIM') }}</strong></div>
+    <div class="summary-card"><span>Débitos ativos</span><strong>{{ getTotal('DEBITO', 'SIM') }}</strong></div>
+    <div class="summary-card"><span>Transferências</span><strong>{{ getTotal('TRANSFERENCIA', 'SIM') }}</strong></div>
   </div>
 
   <div class="card table-card">
@@ -44,8 +44,8 @@
             <td><strong>{{ categoria.nome }}</strong><div class="id-text">ID: {{ categoria.id }}</div></td>
             <td><span class="code-badge">{{ categoria.tipo }}</span></td>
             <td><span class="type-badge type-{{ categoria.tipo }}">{{ tipos[categoria.tipo] }}</span></td>
-            <td><span class="status-badge" [class.inactive]="categoria.ativo === 'I'">{{ status[categoria.ativo] }} ({{ categoria.ativo }})</span></td>
-            <td><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" (click)="abrirModal(categoria)" title="Editar">Editar</button><button class="btn btn-ghost btn-sm" type="button" (click)="alternarStatus(categoria)">{{ categoria.ativo === 'A' ? 'Inativar' : 'Ativar' }}</button><button class="btn btn-ghost btn-sm danger" type="button" (click)="excluir(categoria)" title="Excluir">Excluir</button></div></td>
+            <td><span class="status-badge" [class.inactive]="categoria.ativo === 'NAO'">{{ status[categoria.ativo] }} ({{ categoria.ativo }})</span></td>
+            <td><div class="row-actions"><button class="btn btn-ghost btn-sm" type="button" (click)="abrirModal(categoria)" title="Editar">Editar</button><button class="btn btn-ghost btn-sm" type="button" (click)="alternarStatus(categoria)">{{ categoria.ativo === 'SIM' ? 'Inativar' : 'Ativar' }}</button><button class="btn btn-ghost btn-sm danger" type="button" (click)="excluir(categoria)" title="Excluir">Excluir</button></div></td>
           </tr>
           <tr *ngIf="categoriasFiltradas.length === 0"><td colspan="5" class="empty-state">Nenhuma categoria encontrada.</td></tr>
         </tbody>

@@ -1,8 +1,8 @@
 export type TipoLancamentoCartao = 'credito' | 'debito';
 
 export interface LancamentoCartao {
-  id: string;
-  vinculoId: string;
+  id: number;
+  vinculoId: number;
   
   tipo: TipoLancamentoCartao;
   descricao: string;
@@ -11,5 +11,5 @@ export interface LancamentoCartao {
   data: string;
   competencia?: string;
   observacao?: string;
-  transferenciaId?: string;
+  transferenciaId?: number;
 }

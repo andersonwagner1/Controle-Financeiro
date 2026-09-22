@@ -28,7 +28,9 @@ export class ContasBaseComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.initForm();
     this.subs.add(
-      this.contaBaseService.getContasBase().subscribe(c => { this.contasBase = c; })
+      this.contaBaseService.getContasBase().subscribe(c => { 
+        this.contasBase = c; 
+      })
     );
   }
 

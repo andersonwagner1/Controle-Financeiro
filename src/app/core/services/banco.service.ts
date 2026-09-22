@@ -27,11 +27,11 @@ export class BancoService {
     return this.bancos$.getValue();
   }
 
-  getBancoById(id: string): Banco | undefined {
+  getBancoById(id: number): Banco | undefined {
     return this.bancos$.getValue().find(b => b.id === id);
   }
 
-  consultarBanco(id: string): Observable<Banco> {
+  consultarBanco(id: number): Observable<Banco> {
     return this.http.get<Banco>(`${this.apiUrl}/${id}`);
   }
 

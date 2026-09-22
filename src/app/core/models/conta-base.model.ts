@@ -1,7 +1,7 @@
 import { TipoConta } from './conta.model';
 
 export interface ContaBase {
-  id: string;
+  id: number;
   descricao: string;
   tipo: TipoConta;
 }

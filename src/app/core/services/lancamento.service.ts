@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { Lancamento } from '../models/lancamento.model';
 import { ContaService } from './conta.service';
+import { VinculoService } from './vinculo.service';
 
 export interface PaginaLancamentos {
   content: Lancamento[];
@@ -17,7 +18,7 @@ export class LancamentoService {
   private readonly apiUrl = 'http://localhost:8080/api/lancamentos';
   private lancamentos$ = new BehaviorSubject<Lancamento[]>([]);
 
-  constructor(private contaService: ContaService, private http: HttpClient) {
+  constructor(private vinculoService: VinculoService,  private contaService: ContaService, private http: HttpClient) {
     const { dataInicio, dataFim } = this.periodoMesVigente();
     this.buscarPagina(dataInicio, dataFim).subscribe({ error: () => undefined });
   }
@@ -26,7 +27,7 @@ export class LancamentoService {
     return this.lancamentos$.asObservable();
   }
 
-  buscarPagina(dataInicio: string, dataFim: string, page = 0, size = 50, contaId?: string): Observable<Lancamento[]> {
+  buscarPagina(dataInicio: string, dataFim: string, page = 0, size = 50, contaId?: number): Observable<Lancamento[]> {
     if (!dataInicio || !dataFim) {
       throw new Error('dataInicio e dataFim são obrigatórios para consultar lançamentos.');
     }
@@ -41,14 +42,13 @@ export class LancamentoService {
     if (contaId) {
       params = params.set('contaId', contaId);
     }
-    
+
     return this.http.get<Lancamento[]>(this.apiUrl, { params }).pipe(
-      tap(resultado => 
-        {
-          
-          this.lancamentos$.next(resultado);
-          
-  })
+      tap(resultado => {
+
+        this.lancamentos$.next(resultado);
+
+      })
     );
   }
 
@@ -65,56 +65,60 @@ export class LancamentoService {
     return this.lancamentos$.getValue();
   }
 
-  getLancamentosByConta(contaId: string): Lancamento[] {
-    return this.lancamentos$.getValue().filter(l => l.contaId === contaId);
+  getLancamentosByConta(bancoContaId: number): Lancamento[] {
+    return this.lancamentos$.getValue().filter(l => l.bancoContaId === bancoContaId);
   }
 
   adicionarLancamento(lancamento: Omit<Lancamento, 'id' | 'saldoApos'>): void {
-    const conta = this.contaService.getContaById(lancamento.contaId);
+    const conta = this.vinculoService.getVinculoById(lancamento.bancoContaId);
     if (!conta) return;
 
-    const novoSaldo = lancamento.tipo === 'credito'
+    const novoSaldo = lancamento.tipo === 'CREDITO'
       ? conta.saldo + lancamento.valor
       : conta.saldo - lancamento.valor;
 
     const novoLancamento: Lancamento = {
       ...lancamento,
-      id: 'l' + Date.now(),
+      
       saldoApos: novoSaldo,
     };
 
-    this.http.post<Lancamento>(this.apiUrl, novoLancamento).subscribe({ next: salvo => {
-      this.lancamentos$.next([salvo, ...this.lancamentos$.getValue()]);
-      this.contaService.atualizarSaldo(lancamento.contaId, novoSaldo);
-    }});
+    this.http.post<Lancamento>(this.apiUrl, novoLancamento).subscribe({
+      next: salvo => {
+        this.lancamentos$.next([salvo, ...this.lancamentos$.getValue()]);
+        this.contaService.atualizarSaldo(lancamento.bancoContaId, novoSaldo);
+      }
+    });
   }
 
   atualizarLancamento(lancamento: Lancamento): void {
     const oldLancamento = this.getLancamentosSnapshot().find(l => l.id === lancamento.id);
     if (!oldLancamento) return;
 
-    const conta = this.contaService.getContaById(lancamento.contaId);
+    const conta = this.contaService.getContaById(lancamento.bancoContaId);
     if (!conta) return;
 
-    let saldoTemp = oldLancamento.tipo === 'credito' ? conta.saldo - oldLancamento.valor : conta.saldo + oldLancamento.valor;
-    let novoSaldo = lancamento.tipo === 'credito' ? saldoTemp + lancamento.valor : saldoTemp - lancamento.valor;
+    let saldoTemp = oldLancamento.tipo === 'CREDITO' ? conta.saldo - oldLancamento.valor : conta.saldo + oldLancamento.valor;
+    let novoSaldo = lancamento.tipo === 'CREDITO' ? saldoTemp + lancamento.valor : saldoTemp - lancamento.valor;
 
     const atualizado = { ...lancamento, saldoApos: novoSaldo };
     const lancamentos = this.getLancamentosSnapshot().map(l => l.id === lancamento.id ? atualizado : l);
-    this.http.put<Lancamento>(`${this.apiUrl}/${lancamento.id}`, atualizado).subscribe({ next: salvo => {
-      this.lancamentos$.next(lancamentos.map(item => item.id === salvo.id ? salvo : item));
-      this.contaService.atualizarSaldo(lancamento.contaId, novoSaldo);
-    }});
+    this.http.put<Lancamento>(`${this.apiUrl}/${lancamento.id}`, atualizado).subscribe({
+      next: salvo => {
+        this.lancamentos$.next(lancamentos.map(item => item.id === salvo.id ? salvo : item));
+        this.contaService.atualizarSaldo(lancamento.bancoContaId, novoSaldo);
+      }
+    });
   }
 
-  removerLancamento(id: string): void {
+  removerLancamento(id?: number): void {
     const lancamento = this.getLancamentosSnapshot().find(l => l.id === id);
     if (!lancamento) return;
 
-    const conta = this.contaService.getContaById(lancamento.contaId);
+    const conta = this.contaService.getContaById(lancamento.bancoContaId);
     if (conta) {
-      let novoSaldo = lancamento.tipo === 'credito' ? conta.saldo - lancamento.valor : conta.saldo + lancamento.valor;
-      this.contaService.atualizarSaldo(lancamento.contaId, novoSaldo);
+      let novoSaldo = lancamento.tipo === 'CREDITO' ? conta.saldo - lancamento.valor : conta.saldo + lancamento.valor;
+      this.contaService.atualizarSaldo(lancamento.bancoContaId, novoSaldo);
     }
 
     this.http.delete(`${this.apiUrl}/${id}`).subscribe({ next: () => this.lancamentos$.next(this.getLancamentosSnapshot().filter(l => l.id !== id)) });
@@ -124,7 +128,7 @@ export class LancamentoService {
     return this.lancamentos$.getValue()
       .filter(l => {
         const d = new Date(l.data);
-        return l.tipo === 'credito' && d.getMonth() + 1 === mes && d.getFullYear() === ano;
+        return l.tipo === 'CREDITO' && d.getMonth() + 1 === mes && d.getFullYear() === ano;
       })
       .reduce((acc, l) => acc + l.valor, 0);
   }
@@ -133,7 +137,7 @@ export class LancamentoService {
     return this.lancamentos$.getValue()
       .filter(l => {
         const d = new Date(l.data);
-        return l.tipo === 'debito' && d.getMonth() + 1 === mes && d.getFullYear() === ano;
+        return l.tipo === 'DEBITO' && d.getMonth() + 1 === mes && d.getFullYear() === ano;
       })
       .reduce((acc, l) => acc + l.valor, 0);
   }
@@ -141,7 +145,7 @@ export class LancamentoService {
   getTransferencias(): Observable<any[]> {
     return new Observable<any[]>(subscriber => {
       this.lancamentos$.subscribe(lancamentos => {
-        const transferenciasMap = new Map<string, any>();
+        const transferenciasMap = new Map<number, any>();
         for (const l of lancamentos) {
           if (l.transferenciaId) {
             if (!transferenciasMap.has(l.transferenciaId)) {
@@ -149,13 +153,13 @@ export class LancamentoService {
                 id: l.transferenciaId,
                 valor: l.valor,
                 data: l.data,
-                descricao: l.descricao
+                observacao: l.observacao
               });
             }
-            if (l.tipo === 'debito') {
-              transferenciasMap.get(l.transferenciaId).contaOrigemId = l.contaId;
+            if (l.tipo === 'DEBITO') {
+              transferenciasMap.get(l.transferenciaId).contaOrigemId = l.bancoContaId;
             } else {
-              transferenciasMap.get(l.transferenciaId).contaDestinoId = l.contaId;
+              transferenciasMap.get(l.transferenciaId).contaDestinoId = l.bancoContaId;
             }
           }
         }
@@ -165,22 +169,24 @@ export class LancamentoService {
   }
 
   realizarTransferencia(transferencia: any): boolean {
-    const origem = this.contaService.getContaById(transferencia.contaOrigemId);
-    const destino = this.contaService.getContaById(transferencia.contaDestinoId);
+   // const origem = this.contaService.getContaById(transferencia.contaOrigemId);
+   // const destino = this.contaService.getContaById(transferencia.contaDestinoId);
 
-    if (!origem || !destino) return false;
-    if (origem.saldo < transferencia.valor) return false;
+    //if (!origem || !destino) return false;
+    //if (origem.saldo < transferencia.valor) return false;
 
     const transferenciaId = 't' + Date.now();
 
-    this.http.post<any>('http://localhost:8080/api/transferencias', { ...transferencia, id: transferenciaId }).subscribe({ next: salvo => {
-      const valor = transferencia.valor;
-      const debito: Lancamento = { id: `${salvo.id}-debito`, contaId: origem.id, tipo: 'debito', descricao: transferencia.descricao, categoria: 'Transferência Enviada', valor, data: transferencia.data, competencia: transferencia.competencia, transferenciaId: salvo.id };
-      const credito: Lancamento = { id: `${salvo.id}-credito`, contaId: destino.id, tipo: 'credito', descricao: transferencia.descricao, categoria: 'Transferência Recebida', valor, data: transferencia.data, competencia: transferencia.competencia, transferenciaId: salvo.id };
-      this.lancamentos$.next([debito, credito, ...this.getLancamentosSnapshot()]);
-      this.contaService.atualizarSaldo(origem.id, origem.saldo - valor);
-      this.contaService.atualizarSaldo(destino.id, destino.saldo + valor);
-    }});
+    this.http.post<any>('http://localhost:8080/api/transferencias', { ...transferencia, id: transferenciaId }).subscribe({
+      next: salvo => {
+        const valor = transferencia.valor;
+        const debito: Lancamento = {  bancoContaId: transferencia.contaOrigemId, tipo: 'DEBITO', observacao: transferencia.observacao, categoria: 'Transferência Enviada', valor, data: transferencia.data,  transferenciaId: salvo.id };
+        const credito: Lancamento = {  bancoContaId: transferencia.contaDestinoId, tipo: 'CREDITO', observacao: transferencia.observacao, categoria: 'Transferência Recebida', valor, data: transferencia.data, transferenciaId: salvo.id };
+        this.lancamentos$.next([debito, credito, ...this.getLancamentosSnapshot()]);
+        this.contaService.atualizarSaldo(transferencia.contaOrigemId, transferencia.saldoOrigem - valor);
+        this.contaService.atualizarSaldo(transferencia.contaDestinoId, transferencia.saldoDestino + valor);
+      }
+    });
 
     return true;
   }
@@ -188,4 +194,10 @@ export class LancamentoService {
   private formatarData(data: Date): string {
     return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
   }
+
+
+  registrarTransferencia(): Observable<any[]> {   
+   return  this.http.get<Lancamento[]>('http://localhost:8080/api/lancamentos/registrar')
+  }
+
 }

@@ -101,12 +101,12 @@ export class VinculosComponent implements OnInit, OnDestroy {
     this.fecharModal();
   }
 
-  getBancoNome(bancoId: string): string {
-    return this.bancos.find(b => b.id === bancoId)?.nome || bancoId;
+  getBancoNome(bancoId: number): string {
+    return this.bancos.find(b => b.id === bancoId)?.nome || bancoId + "-";
   }
 
-  getContaNome(contaId: string): string {
-    return this.contasBase.find(c => c.id === contaId)?.descricao || contaId;
+  getContaNome(contaId: number): string {
+    return this.contasBase.find(c => c.id === contaId)?.descricao || contaId + "-";
   }
 
   ngOnDestroy(): void {

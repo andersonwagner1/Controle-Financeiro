@@ -38,9 +38,9 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   readonly tamanhoPagina = 50;
 
   showModal = false;
-  tipoModal: 'credito' | 'debito' | 'transferencia' = 'credito';
+  tipoModal: 'RESGATE'| 'APLICACAO' |'CREDITO' | 'DEBITO' | 'TRANSFERENCIA' = 'CREDITO';
   isEditando = false;
-  lancamentoIdEditando: string | null = null;
+  lancamentoIdEditando: number | null = null;
   form!: FormGroup;
   erroTransferencia = '';
 
@@ -53,6 +53,8 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     private fb: FormBuilder,
   ) {}
 
+
+
   ngOnInit(): void {
     this.subs.add(
       this.bancoService.getBancos().subscribe(b => { this.bancos = b; })
@@ -60,8 +62,8 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     this.initForm();
 
     this.subs.add(this.categoriaService.getCategorias().subscribe(categorias => {
-      this.categoriasCredito = categorias.filter(c => c.tipo === 'C' && c.ativo === 'A').map(c => c.nome);
-      this.categoriasDebito = categorias.filter(c => c.tipo === 'D' && c.ativo === 'A').map(c => c.nome);
+      this.categoriasCredito = categorias.filter(c => c.tipo === 'CREDITO' && c.ativo === 'SIM').map(c => c.nome);
+      this.categoriasDebito = categorias.filter(c => c.tipo === 'DEBITO' && c.ativo === 'SIM').map(c => c.nome);
     }));
 
     this.subs.add(this.investimentoService.getInvestimentosAtivos().subscribe(investimentos => {
@@ -72,9 +74,12 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     this.subs.add(
       this.contaService.getContas().subscribe(c => { this.contas = c; })
     );
+
+    this.lancamentoService.getLancamentos().subscribe
     this.subs.add(
       this.lancamentoService.getLancamentos().subscribe(l => {
         this.lancamentosFiltrados = l;
+        
         this.aplicarFiltros();
       })
     );
@@ -87,20 +92,21 @@ export class LancamentosComponent implements OnInit, OnDestroy {
       contaDestinoId: [''], // Only used for transfers
       aplicacao: [false],
       investimento: [{ value: '', disabled: true }],
-      descricao: ['', [Validators.required, Validators.minLength(2)]],
+      
       categoria: [''], // Will be dynamically validated if not transfer
       valor: [null, [Validators.required, Validators.min(0.01)]],
-      data: [new Date().toISOString().split('T')[0], Validators.required],
-      competencia: [new Date().toISOString().substring(0, 7), Validators.required],
+     // data: [new Date().toISOString().split('T')[0], Validators.required],
+     data: '2026/09/25',
+     
       observacao: [''],
-    }, { validators: this.validarContasDiferentes });
+    });/*, { validators: this.validarContasDiferentes })*/
   }
 
-  validarContasDiferentes(group: FormGroup): { [key: string]: boolean } | null {
+  /*validarContasDiferentes(group: FormGroup): { [key: string]: boolean } | null {
     const origem = group.get('contaId')?.value;
     const destino = group.get('contaDestinoId')?.value;
     return origem && destino && origem === destino ? { mesmaConta: true } : null;
-  }
+  }*/
 
   aplicarFiltros(): void {
     let resultado = [...this.lancamentosFiltrados];
@@ -125,20 +131,18 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   }
 
   get totalCreditos(): number {
-    return this.lancamentosFiltrados
-      .filter(l => l.tipo === 'credito').reduce((acc, l) => acc + l.valor, 0);
+    return this.lancamentosFiltrados.filter(l => l.tipo === 'CREDITO').reduce((acc, l) => acc + l.valor, 0);
   }
 
   get totalDebitos(): number {
-    return this.lancamentosFiltrados
-      .filter(l => l.tipo === 'debito').reduce((acc, l) => acc + l.valor, 0);
+    return this.lancamentosFiltrados.filter(l => l.tipo === 'DEBITO').reduce((acc, l) => acc + l.valor, 0);
   }
 
   get periodoConsulta(): { dataInicio: string; dataFim: string } {
     return this.periodoDaCompetencia();
   }
 
-  abrirModal(tipo: 'credito' | 'debito' | 'transferencia'): void {
+  abrirModal(tipo: 'DEBITO' | 'CREDITO' | 'TRANSFERENCIA' | 'APLICACAO' | 'RESGATE'): void {
     this.isEditando = false;
     this.lancamentoIdEditando = null;
     this.tipoModal = tipo;
@@ -152,7 +156,7 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     });
     this.alterarAplicacao();
 
-    if (tipo === 'transferencia') {
+    if (tipo === 'TRANSFERENCIA') {
       this.form.get('categoria')?.clearValidators();
       this.form.get('contaDestinoId')?.setValidators(Validators.required);
     } else {
@@ -176,28 +180,28 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   }
 
   editarLancamento(lancamento: Lancamento): void {
+    
     this.isEditando = true;
-    this.lancamentoIdEditando = lancamento.id;
+    this.lancamentoIdEditando = lancamento.id == undefined ? 0  :lancamento.id;
     this.tipoModal = lancamento.tipo; // For edits, we only support credito/debito for now
     this.form.get('categoria')?.setValidators(Validators.required);
-    this.form.get('contaDestinoId')?.clearValidators();
+    this.form.get('bancoContaDestinoId')?.clearValidators();
     this.form.get('categoria')?.updateValueAndValidity();
-    this.form.get('contaDestinoId')?.updateValueAndValidity();
+    this.form.get('bancoContaDestinoId')?.updateValueAndValidity();
 
     this.form.patchValue({
-      contaId: lancamento.contaId,
-      descricao: lancamento.descricao,
+      bancoContaId: lancamento.bancoContaId,      
       categoria: lancamento.categoria,
       valor: lancamento.valor,
       data: lancamento.data,
-      competencia: lancamento.competencia || lancamento.data.substring(0, 7),
+      
       observacao: lancamento.observacao
     });
     this.showModal = true;
   }
 
   excluirLancamento(lancamento: Lancamento): void {
-    if (confirm(`Tem certeza que deseja excluir o lançamento "${lancamento.descricao}"?`)) {
+    if (confirm(`Tem certeza que deseja excluir o lançamento "${lancamento.categoria}"?`)) {
       this.lancamentoService.removerLancamento(lancamento.id);
     }
   }
@@ -207,7 +211,7 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   }
 
   get categoriasForm(): string[] {
-    return this.tipoModal === 'credito' ? this.categoriasCredito : this.categoriasDebito;
+    return this.tipoModal === 'CREDITO' ? this.categoriasCredito : this.categoriasDebito;
   }
 
   get contasDisponiveis(): Conta[] {
@@ -224,12 +228,12 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     });
   }
 
-  getContasDisponiveisPorBanco(bancoId: string): Conta[] {
+  getContasDisponiveisPorBanco(bancoId: number): Conta[] {
     return this.contasDisponiveis.filter(conta => conta.bancoId === bancoId);
   }
 
   alterarCompetencia(): void {
-    if (this.filtroConta !== 'todas' && !this.contasDisponiveis.some(conta => conta.id === this.filtroConta)) {
+    if (this.filtroConta !== 'todas' && !this.contasDisponiveis.some(conta => conta.id+"" === this.filtroConta)) {
       this.filtroConta = 'todas';
     }
     this.paginaAtual = 0;
@@ -258,7 +262,7 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   private carregarPagina(): void {
     const { dataInicio, dataFim } = this.periodoDaCompetencia();
     const contaId = this.filtroConta === 'todas' ? undefined : this.filtroConta;
-    this.subs.add(this.lancamentoService.buscarPagina(dataInicio, dataFim, this.paginaAtual, this.tamanhoPagina, contaId)
+   /* this.subs.add(this.lancamentoService.buscarPagina(dataInicio, dataFim, this.paginaAtual, this.tamanhoPagina, contaId)
       .subscribe({
         next: (pagina: Lancamento[]) => {
           this.lancamentosFiltrados = pagina;
@@ -269,7 +273,7 @@ export class LancamentosComponent implements OnInit, OnDestroy {
           this.totalPaginas = 0;
           this.totalLancamentos = 0;
         }
-      }));
+      }));*/
   }
 
   private periodoDaCompetencia(): { dataInicio: string; dataFim: string } {
@@ -281,75 +285,79 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   }
 
   salvarLancamento(): void {
-    if (this.form.invalid) return;
-    const val = this.form.value;
     
-    if (this.tipoModal === 'transferencia') {
+   // if (this.form.invalid) return;
+    const val = this.form.value;
+    console.log(val);
+    if (this.tipoModal === 'TRANSFERENCIA') {
       const sucesso = this.lancamentoService.realizarTransferencia({
-        contaOrigemId: val.contaId,
-        contaDestinoId: val.contaDestinoId,
+        bancoContaOrigemId: val.contaId,
+        bancoContaDestinoId: val.contaDestinoId,
         valor: +val.valor,
         data: val.data,
         competencia: val.competencia,
         descricao: val.descricao,
         investimentoId: val.investimentoId || undefined,
       });
-      
-      if (!sucesso) {
-        this.erroTransferencia = 'Saldo insuficiente ou contas inválidas.';
-        return;
-      }
+
+    
+
+      //if (!sucesso) {
+      //  this.erroTransferencia = 'Saldo insuficiente ou contas inválidas.';
+      //  return;
+     // }
     } else {
       if (this.isEditando && this.lancamentoIdEditando) {
         this.lancamentoService.atualizarLancamento({
           id: this.lancamentoIdEditando,
-          contaId: val.contaId,
-          tipo: this.tipoModal,
-          descricao: val.descricao,
+          bancoContaId: val.contaId,
+          tipo: this.tipoModal,          
           categoria: val.categoria,
           valor: +val.valor,
           data: val.data,
-          competencia: val.competencia,
+          
           observacao: val.observacao || undefined,
         });
       } else {
+        console.log(val);
         this.lancamentoService.adicionarLancamento({
-          contaId: val.contaId,
+          bancoContaId: val.contaId,
           tipo: this.tipoModal,
-          descricao: val.descricao,
           categoria: val.categoria,
           valor: +val.valor,
           data: val.data,
-          competencia: val.competencia,
+          
           observacao: val.observacao || undefined,
         });
       }
     }
-    
-    this.fecharModal();
+
+   // this.fecharModal();
   }
 
-  getContaNome(contaId: string): string {
+  getContaNome(contaId: number): string {
     const conta = this.contas.find(c => c.id === contaId);
-    return conta ? conta.descricao : contaId;
+    return conta ? conta.descricao : contaId + "-";
   }
 
-  getBancoNome(contaId: string): string {
+  getBancoNome(contaId: number): string {
     const conta = this.contas.find(c => c.id === contaId);
     if (!conta) return '';
     const banco = this.bancos.find(b => b.id === conta.bancoId);
     return banco ? banco.nome : '';
   }
 
-  getContaTipo(contaId: string): string {
+  getContaTipo(contaId: number): string {
     return this.contas.find(c => c.id === contaId)?.tipo ?? '';
   }
 
-  getBancoCor(contaId: string): string {
+  getBancoCor(contaId: number): string {
     const conta = this.contas.find(c => c.id === contaId);
     if (!conta) return '#888';
     return this.bancos.find(b => b.id === conta.bancoId)?.cor ?? '#888';
   }
+
+
 
   ngOnDestroy(): void {
     this.subs.unsubscribe();

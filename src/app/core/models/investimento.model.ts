@@ -1,5 +1,6 @@
 export interface Investimento {
-  id: string;
+  id: number;
   nome: string;
+  contaId: number;
   ativo: boolean;
 }

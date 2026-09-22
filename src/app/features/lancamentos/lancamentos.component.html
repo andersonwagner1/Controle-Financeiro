@@ -6,19 +6,19 @@
       <p class="page-subtitle">Registre créditos e débitos em suas contas</p>
     </div>
     <div class="action-btns">
-      <button class="btn btn-success" (click)="abrirModal('credito')">
+      <button class="btn btn-success" (click)="abrirModal('CREDITO')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
         Novo Crédito
       </button>
-      <button class="btn btn-danger" (click)="abrirModal('debito')">
+      <button class="btn btn-danger" (click)="abrirModal('DEBITO')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
         Novo Débito
       </button>
-      <button class="btn btn-primary" (click)="abrirModal('transferencia')">
+      <button class="btn btn-primary" (click)="abrirModal('TRANSFERENCIA')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <path d="M7 7h13l-3-3M17 17H4l3 3"/><path d="M20 7l-3 3M4 17l3-3"/>
         </svg>
@@ -105,8 +105,7 @@
       <thead>
         <tr>
           <th>Data</th>
-          <th>Tipo</th>
-          <th>Descrição</th>
+          <th>Tipo</th>         
           <th>Conta</th>
           <th>Banco</th>
           <th>Categoria</th>
@@ -117,31 +116,39 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let l of lancamentosFiltrados" [class.row-credito]="l.tipo==='credito'" [class.row-debito]="l.tipo==='debito'">
+        <tr *ngFor="let l of lancamentosFiltrados" [class.row-credito]="l.tipo==='CREDITO'" [class.row-debito]="l.tipo==='DEBITO'">
           <td class="text-secondary">{{ l.data | date:'dd/MM/yyyy' }}</td>
           <td>
-            <span class="tipo-pill" [class.credito]="l.tipo==='credito'" [class.debito]="l.tipo==='debito'">
-              {{ l.tipo === 'credito' ? '▲ Crédito' : '▼ Débito' }}
-            </span>
-          </td>
-          <td>
-            <div class="lancamento-desc">{{ l.descricao }}</div>
-          </td>
+            <span class="tipo-pill" 
+                [class.credito]="l.tipo === 'CREDITO'" 
+                [class.debito]="l.tipo === 'DEBITO'"
+                [class.transferencia]="l.tipo === 'TRANSFERENCIA'"
+                [class.aplicacao]="l.tipo === 'APLICACAO'"
+                [class.resgate]="l.tipo === 'RESGATE'">
+                  {{ 
+                    l.tipo === 'CREDITO' ? '▲ Crédito' :
+                    l.tipo === 'DEBITO' ? '▼ Débito' :
+                    l.tipo === 'TRANSFERENCIA' ? '⇄ Transferência' :
+                    l.tipo === 'APLICACAO' ? '🏦 Aplicação' :
+                    l.tipo === 'RESGATE' ? '💰 Resgate' : l.tipo
+                  }}
+              </span>
+          </td>          
           <td>
             <div class="conta-cell">
-              <div class="conta-dot" [style.background]="getBancoCor(l.contaId)"></div>
+              <div class="conta-dot" [style.background]="getBancoCor(l.bancoContaId)"></div>
               <div>
-                <div class="conta-nome">{{ getContaNome(l.contaId) }}</div>
-                <span class="badge-tipo badge-{{ getContaTipo(l.contaId) }}" style="font-size:0.68rem">{{ getContaTipo(l.contaId) }}</span>
+                <div class="conta-nome">{{ getContaNome(l.bancoContaId) }}</div>
+                <span class="badge-tipo badge-{{ getContaTipo(l.bancoContaId) }}" style="font-size:0.68rem">{{ getContaTipo(l.bancoContaId) }}</span>
               </div>
             </div>
           </td>
-          <td class="text-secondary">{{ getBancoNome(l.contaId) }}</td>
+          <td class="text-secondary">{{ getBancoNome(l.bancoContaId) }}</td>
           <td><span class="cat-chip">{{ l.categoria }}</span></td>
           <td class="text-muted" style="font-size:0.82rem">{{ l.observacao || '—' }}</td>
           <td style="text-align:right">
-            <span class="valor-cell" [class.text-success]="l.tipo==='credito'" [class.text-danger]="l.tipo==='debito'">
-              {{ l.tipo === 'credito' ? '+' : '-' }}{{ l.valor | currencyBr }}
+            <span class="valor-cell" [class.text-success]="l.tipo==='CREDITO'" [class.text-danger]="l.tipo==='DEBITO'">
+              {{ l.tipo === 'CREDITO' ? '+' : '-' }}{{ l.valor | currencyBr }}
             </span>
           </td>
           <td style="text-align:right" class="text-secondary" style="font-size:0.82rem">
@@ -175,9 +182,9 @@
   <div class="modal-box" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h3>
-        <span *ngIf="tipoModal==='credito'" class="text-success">{{ isEditando ? 'Editar Crédito' : '▲ Novo Crédito' }}</span>
-        <span *ngIf="tipoModal==='debito'" class="text-danger">{{ isEditando ? 'Editar Débito' : '▼ Novo Débito' }}</span>
-        <span *ngIf="tipoModal==='transferencia'" style="color:var(--text)">⇄ Nova Transferência</span>
+        <span *ngIf="tipoModal==='CREDITO'" class="text-success">{{ isEditando ? 'Editar Crédito' : '▲ Novo Crédito' }}</span>
+        <span *ngIf="tipoModal==='DEBITO'" class="text-danger">{{ isEditando ? 'Editar Débito' : '▼ Novo Débito' }}</span>
+        <span *ngIf="tipoModal==='TRANSFERENCIA'" style="color:var(--text)">⇄ Nova Transferência</span>
       </h3>
       <button class="modal-close" (click)="fecharModal()">×</button>
     </div>
@@ -186,8 +193,8 @@
       <div class="modal-body">
         
         <div class="form-group">
-          <label class="form-label">{{ tipoModal === 'transferencia' ? 'Conta de Origem *' : 'Conta *' }}</label>
-          <select class="form-control" formControlName="contaId">
+          <label class="form-label">{{ tipoModal === 'TRANSFERENCIA' ? 'Conta de Origem *' : 'Conta *' }}</label>
+          <select class="form-control" formControlName="bancoContaId">
 
              <ng-container *ngFor="let b of bancos">
                   <optgroup *ngIf="getContasDisponiveisPorBanco(b.id).length > 0" [label]="b.nome">
@@ -213,12 +220,12 @@
               </option>
             </optgroup>-->
           </select>
-          <div class="error-hint" *ngIf="tipoModal === 'transferencia' && form.hasError('mesmaConta')">
+          <div class="error-hint" *ngIf="tipoModal === 'TRANSFERENCIA' && form.hasError('mesmaConta')">
             Origem e destino devem ser contas diferentes.
           </div>
         </div>
 
-        <div class="form-group" *ngIf="tipoModal === 'transferencia'">
+        <div class="form-group" *ngIf="tipoModal === 'TRANSFERENCIA'">
           <label class="form-label">Conta de Destino *</label>
           <select class="form-control" formControlName="contaDestinoId">
                <ng-container *ngFor="let b of bancos">
@@ -239,14 +246,14 @@
           </select>
         </div>
 
-        <div class="form-group" *ngIf="tipoModal === 'transferencia'">
+        <div class="form-group" *ngIf="tipoModal === 'TRANSFERENCIA'">
           <label class="checkbox-label">
             <input type="checkbox" formControlName="aplicacao" (change)="alterarAplicacao()" />
             <span>APLICAÇÃO/RESGATE</span>
           </label>
         </div>
 
-        <div class="form-group" *ngIf="tipoModal === 'transferencia'">
+        <div class="form-group" *ngIf="tipoModal === 'TRANSFERENCIA'">
           <label class="form-label">Investimento</label>
           <select class="form-control" formControlName="investimento">
 
@@ -261,11 +268,7 @@
             Marque “APLICAÇÃO/RESGATE” para selecionar um investimento.
           </small>
         </div>
-
-        <div class="form-group">
-          <label class="form-label">Descrição *</label>
-          <input class="form-control" type="text" formControlName="descricao" placeholder="Ex: Salário, Supermercado..." />
-        </div>
+       
 
         <div class="form-row">
           <div class="form-group" style="flex:1">
@@ -275,20 +278,14 @@
           <div class="form-group" style="flex:1">
             <label class="form-label">Data *</label>
             <input class="form-control" type="date" formControlName="data" />
-          </div>
-         <!-- 
-          <div class="form-group" style="flex:1">
-            <label class="form-label">Competência *</label>
-            <input class="form-control" type="month" formControlName="competencia" />
-          </div>
-          -->
+          </div>        
         </div>
 
-        <div class="alert-danger" *ngIf="tipoModal === 'transferencia' && erroTransferencia">
+        <div class="alert-danger" *ngIf="tipoModal === 'TRANSFERENCIA' && erroTransferencia">
           {{ erroTransferencia }}
         </div>
 
-        <div class="form-group" *ngIf="tipoModal !== 'transferencia'">
+        <div class="form-group" *ngIf="tipoModal !== 'TRANSFERENCIA'">
           <label class="form-label">Categoria *</label>
           <select class="form-control" formControlName="categoria">
             <option value="">Selecione...</option>
@@ -304,11 +301,11 @@
       
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost" (click)="fecharModal()">Cancelar</button>
-        <button type="submit" class="btn" [class.btn-success]="tipoModal==='credito'" [class.btn-danger]="tipoModal==='debito'" [disabled]="form.invalid">
-          <ng-container *ngIf="tipoModal !== 'transferencia'">
-            {{ isEditando ? 'Salvar Alterações' : 'Registrar ' + (tipoModal === 'credito' ? 'Crédito' : 'Débito') }}
+        <button type="submit" class="btn"  (click)="salvarLancamento()" [class.btn-success]="tipoModal==='CREDITO'" [class.btn-danger]="tipoModal==='DEBITO'" [disabled]="form.invalid">
+          <ng-container *ngIf="tipoModal !== 'TRANSFERENCIA'">
+            {{ isEditando ? 'Salvar Alterações' : 'Registrar ' + (tipoModal === 'CREDITO' ? 'Crédito' : 'Débito') }}
           </ng-container>
-          <ng-container *ngIf="tipoModal === 'transferencia'">
+          <ng-container *ngIf="tipoModal === 'TRANSFERENCIA'">
             Registrar Transferência
           </ng-container>
         </button>
