@@ -1,31 +1,37 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { LancamentoService, PaginaLancamentos } from '../../core/services/lancamento.service';
 import { ContaService } from '../../core/services/conta.service';
 import { BancoService } from '../../core/services/banco.service';
-import { Lancamento, CATEGORIAS_CREDITO, CATEGORIAS_DEBITO } from '../../core/models/lancamento.model';
+
 import { Conta, TIPOS_CONTA } from '../../core/models/conta.model';
 import { Banco } from '../../core/models/banco.model';
 import { CategoriaService } from '../../core/services/categoria.service';
 import { Investimento } from '../../core/models/investimento.model';
 import { InvestimentoService } from '../../core/services/investimento.service';
+import { VinculoService } from '../../core/services/vinculo.service';
+import { Vinculo } from '../../core/models/vinculo.model';
+import { Categoria } from '../../core/models/categoria.model';
+import { Lancamento } from '../../core/models/lancamento.model';
 
 @Component({
   selector: 'app-lancamentos',
   templateUrl: './lancamentos.component.html',
   styleUrls: ['./lancamentos.component.scss']
 })
-export class LancamentosComponent implements OnInit, OnDestroy {
-  private subs = new Subscription();
+export class LancamentosComponent implements OnInit {
+
+
 
 
   lancamentosFiltrados: Lancamento[] = [];
   contas: Conta[] = [];
   bancos: Banco[] = [];
   tiposConta = TIPOS_CONTA;
-  categoriasCredito: string[] = CATEGORIAS_CREDITO.slice();
-  categoriasDebito: string[] = CATEGORIAS_DEBITO.slice();
+  categoriasCredito: string[] = [];
+  categoriasDebito: string[] = [];
   investimentos: Investimento[] = [];
 
   filtroTipo = 'todos';
@@ -43,53 +49,29 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   lancamentoIdEditando: number | null = null;
   form!: FormGroup;
   erroTransferencia = '';
-
-  constructor(
-    private lancamentoService: LancamentoService,
-    private contaService: ContaService,
-    private bancoService: BancoService,
-    private categoriaService: CategoriaService,
-    private investimentoService: InvestimentoService,
-    private fb: FormBuilder,
-  ) {}
-
-
-
+  mensagemErro = '';
+  mensagemSucesso = '';
+  salvando = false;
   ngOnInit(): void {
-    this.subs.add(
-      this.bancoService.getBancos().subscribe(b => { this.bancos = b; })
-    );
-    this.initForm();
+    this.bancoService.getBancos().subscribe(b=>{
+      this.bancos = b
+    });
 
-    this.subs.add(this.categoriaService.getCategorias().subscribe(categorias => {
-      this.categoriasCredito = categorias.filter(c => c.tipo === 'CREDITO' && c.ativo === 'SIM').map(c => c.nome);
-      this.categoriasDebito = categorias.filter(c => c.tipo === 'DEBITO' && c.ativo === 'SIM').map(c => c.nome);
-    }));
+    this.categoriaService.getCategorias().subscribe(categorias =>{
+      console.log(categorias);
+      this.categoriasCredito = categorias
+          .filter(t => t.tipo === 'CREDITO')
+          .map(t => t.nome);
+      this.categoriasDebito = categorias
+          .filter(t => t.tipo === 'DEBITO')
+          .map(t => t.nome);
+          });
 
-    this.subs.add(this.investimentoService.getInvestimentosAtivos().subscribe(investimentos => {
-      this.investimentos = investimentos;
-    }));
-    this.subs.add(this.investimentoService.listarInvestimentos().subscribe({ error: () => undefined }));
-
-    this.subs.add(
-      this.contaService.getContas().subscribe(c => { this.contas = c; })
-    );
-
-    this.lancamentoService.getLancamentos().subscribe
-    this.subs.add(
-      this.lancamentoService.getLancamentos().subscribe(l => {
-        this.lancamentosFiltrados = l;
-        
-        this.aplicarFiltros();
-      })
-    );
-    this.carregarPagina();
-  }
-
-  initForm(): void {
-    this.form = this.fb.group({
-      contaId: ['', Validators.required],
-      contaDestinoId: [''], // Only used for transfers
+    this.contaService.getContas().subscribe(c => { this.contas = c; })
+    
+     this.form = this.fb.group({
+      bancoContaId: ['', Validators.required],
+      bancoContaDestinoId: [''], // Only used for transfers
       aplicacao: [false],
       investimento: [{ value: '', disabled: true }],
       
@@ -100,37 +82,26 @@ export class LancamentosComponent implements OnInit, OnDestroy {
      
       observacao: [''],
     });/*, { validators: this.validarContasDiferentes })*/
-  }
-
-  /*validarContasDiferentes(group: FormGroup): { [key: string]: boolean } | null {
-    const origem = group.get('contaId')?.value;
-    const destino = group.get('contaDestinoId')?.value;
-    return origem && destino && origem === destino ? { mesmaConta: true } : null;
-  }*/
-
-  aplicarFiltros(): void {
-    let resultado = [...this.lancamentosFiltrados];
     
-     this.lancamentosFiltrados = resultado;
-
-   /* if (this.filtroTipo !== 'todos') {
-      resultado = resultado.filter(l => l.tipo === this.filtroTipo);
-    }
-
-    if (this.filtroConta !== 'todas') {
-      resultado = resultado.filter(l => l.contaId === this.filtroConta);
-    }
-
-    if (this.filtroCompetencia) {
-      resultado = resultado.filter(l => (l.competencia || l.data.substring(0, 7)) === this.filtroCompetencia);
-    }
-
-    this.lancamentosFiltrados = resultado.sort(
-      (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
-    );*/
   }
 
-  get totalCreditos(): number {
+  
+
+
+   constructor(
+    private lancamentoService: LancamentoService,
+    private contaService: ContaService,
+    private bancoService: BancoService,
+    private categoriaService: CategoriaService,
+    private investimentoService: InvestimentoService,
+    private vinculoService: VinculoService,
+
+    private fb: FormBuilder,
+  ) {}
+
+
+
+    get totalCreditos(): number {
     return this.lancamentosFiltrados.filter(l => l.tipo === 'CREDITO').reduce((acc, l) => acc + l.valor, 0);
   }
 
@@ -138,15 +109,14 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     return this.lancamentosFiltrados.filter(l => l.tipo === 'DEBITO').reduce((acc, l) => acc + l.valor, 0);
   }
 
-  get periodoConsulta(): { dataInicio: string; dataFim: string } {
-    return this.periodoDaCompetencia();
-  }
 
   abrirModal(tipo: 'DEBITO' | 'CREDITO' | 'TRANSFERENCIA' | 'APLICACAO' | 'RESGATE'): void {
     this.isEditando = false;
     this.lancamentoIdEditando = null;
     this.tipoModal = tipo;
     this.erroTransferencia = '';
+    this.mensagemErro = '';
+    this.mensagemSucesso = '';
     this.form.reset({
       data: new Date().toISOString().split('T')[0],
       competencia: this.filtroCompetencia,
@@ -154,7 +124,7 @@ export class LancamentosComponent implements OnInit, OnDestroy {
       aplicacao: false,
       investimento: ''
     });
-    this.alterarAplicacao();
+    //this.alterarAplicacao();
 
     if (tipo === 'TRANSFERENCIA') {
       this.form.get('categoria')?.clearValidators();
@@ -167,54 +137,61 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     this.form.get('contaDestinoId')?.updateValueAndValidity();
 
     this.showModal = true;
+
+
+
   }
 
-  alterarAplicacao(): void {
-    const investimento = this.form.get('investimento');
-    if (this.form.get('aplicacao')?.value) {
-      investimento?.enable();
-    } else {
-      investimento?.reset('');
-      investimento?.disable();
-    }
-  }
-
-  editarLancamento(lancamento: Lancamento): void {
-    
-    this.isEditando = true;
-    this.lancamentoIdEditando = lancamento.id == undefined ? 0  :lancamento.id;
-    this.tipoModal = lancamento.tipo; // For edits, we only support credito/debito for now
-    this.form.get('categoria')?.setValidators(Validators.required);
-    this.form.get('bancoContaDestinoId')?.clearValidators();
-    this.form.get('categoria')?.updateValueAndValidity();
-    this.form.get('bancoContaDestinoId')?.updateValueAndValidity();
-
-    this.form.patchValue({
-      bancoContaId: lancamento.bancoContaId,      
-      categoria: lancamento.categoria,
-      valor: lancamento.valor,
-      data: lancamento.data,
-      
-      observacao: lancamento.observacao
-    });
-    this.showModal = true;
-  }
-
-  excluirLancamento(lancamento: Lancamento): void {
-    if (confirm(`Tem certeza que deseja excluir o lançamento "${lancamento.categoria}"?`)) {
-      this.lancamentoService.removerLancamento(lancamento.id);
-    }
-  }
 
   fecharModal(): void {
-    this.showModal = false;
+      this.showModal = false;
   }
 
-  get categoriasForm(): string[] {
-    return this.tipoModal === 'CREDITO' ? this.categoriasCredito : this.categoriasDebito;
+  aplicarFiltros(): void {
   }
 
-  get contasDisponiveis(): Conta[] {
+   alterarConta(): void {    
+    this.carregarPagina();
+  }
+
+   private carregarPagina(): void {
+    
+    const { dataInicio, dataFim } = this.periodoDaCompetencia();
+
+    
+
+    const bancoContaId = this.filtroConta === 'todas' ? undefined : Number(this.filtroConta);
+
+    //Adicionar metodo para buscar os lancamentos
+
+    this.lancamentoService.buscarPagina(dataInicio, dataFim, this.paginaAtual, this.tamanhoPagina, bancoContaId)
+      .subscribe({
+        next: (resultado: Lancamento[]) => {
+          this.lancamentosFiltrados = resultado;
+          this.totalLancamentos = resultado.length;
+        },
+        error: () => {
+          //this.lancamentos = [];
+          this.lancamentosFiltrados = [];
+          this.totalPaginas = 0;
+          this.totalLancamentos = 0;
+        }
+      });
+  }
+
+  private periodoDaCompetencia(): { dataInicio: string; dataFim: string } {
+    const [ano, mes] = this.filtroCompetencia.split('-').map(Number);
+    const inicio = new Date(ano, mes - 1, 1);
+    const fim = new Date(ano, mes, 0);
+    const formatar = (data: Date) => `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+    return { dataInicio: formatar(inicio), dataFim: formatar(fim) };
+  }
+
+    getContasDisponiveisPorBanco(bancoId: number): Conta[] {
+    return this.contasDisponiveis.filter(conta => conta.bancoId === bancoId);
+  }
+
+    get contasDisponiveis(): Conta[] {
     if (!this.filtroCompetencia) return this.contas.filter(conta => conta.ativa);
 
     const [ano, mes] = this.filtroCompetencia.split('-').map(Number);
@@ -226,26 +203,15 @@ export class LancamentosComponent implements OnInit, OnDestroy {
       const naoFechadaNaCompetencia = !conta.dataFechamento || conta.dataFechamento >= inicio;
       return conta.ativa && abertaNaCompetencia && naoFechadaNaCompetencia;
     });
+
+
+    
+
   }
 
-  getContasDisponiveisPorBanco(bancoId: number): Conta[] {
-    return this.contasDisponiveis.filter(conta => conta.bancoId === bancoId);
-  }
 
-  alterarCompetencia(): void {
-    if (this.filtroConta !== 'todas' && !this.contasDisponiveis.some(conta => conta.id+"" === this.filtroConta)) {
-      this.filtroConta = 'todas';
-    }
-    this.paginaAtual = 0;
-    this.carregarPagina();
-  }
-
-  alterarConta(): void {
-    this.paginaAtual = 0;
-    this.carregarPagina();
-  }
-
-  alterarMesCompetencia(offset: number): void {
+    alterarMesCompetencia(offset: number): void {
+      console.log("1");
     const [ano, mes] = this.filtroCompetencia.split('-').map(Number);
     const novaCompetencia = new Date(ano, mes - 1 + offset, 1);
     this.filtroCompetencia = `${novaCompetencia.getFullYear()}-${String(novaCompetencia.getMonth() + 1).padStart(2, '0')}`;
@@ -259,39 +225,58 @@ export class LancamentosComponent implements OnInit, OnDestroy {
     this.carregarPagina();
   }
 
-  private carregarPagina(): void {
-    const { dataInicio, dataFim } = this.periodoDaCompetencia();
-    const contaId = this.filtroConta === 'todas' ? undefined : this.filtroConta;
-   /* this.subs.add(this.lancamentoService.buscarPagina(dataInicio, dataFim, this.paginaAtual, this.tamanhoPagina, contaId)
-      .subscribe({
-        next: (pagina: Lancamento[]) => {
-          this.lancamentosFiltrados = pagina;
-        },
-        error: () => {
-          //this.lancamentos = [];
-          this.lancamentosFiltrados = [];
-          this.totalPaginas = 0;
-          this.totalLancamentos = 0;
-        }
-      }));*/
+    alterarCompetencia(): void {
+    if (this.filtroConta !== 'todas' && !this.contasDisponiveis.some(conta => conta.id+"" === this.filtroConta)) {
+      this.filtroConta = 'todas';
+    }
+    this.paginaAtual = 0;
+    this.carregarPagina();
   }
 
-  private periodoDaCompetencia(): { dataInicio: string; dataFim: string } {
-    const [ano, mes] = this.filtroCompetencia.split('-').map(Number);
-    const inicio = new Date(ano, mes - 1, 1);
-    const fim = new Date(ano, mes, 0);
-    const formatar = (data: Date) => `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
-    return { dataInicio: formatar(inicio), dataFim: formatar(fim) };
+   get periodoConsulta(): { dataInicio: string; dataFim: string } {
+    return this.periodoDaCompetencia();
   }
+
+    getContaNome(contaId: number): string {
+    const conta = this.contas.find(c => c.id === contaId);
+    return conta ? conta.descricao : contaId + "-";
+  }
+
+  
+  getBancoCor(contaId: number): string {
+    const conta = this.contas.find(c => c.id === contaId);
+    if (!conta) return '#888';
+    return this.bancos.find(b => b.id === conta.bancoId)?.cor ?? '#888';
+  }
+
+    getBancoNome(contaId: number): string {
+    const conta = this.contas.find(c => c.id === contaId);
+    if (!conta) return '';
+    const banco = this.bancos.find(b => b.id === conta.bancoId);
+    return banco ? banco.nome : '';
+  }
+
+
+    getContaTipo(contaId: number): string {
+    return this.contas.find(c => c.id === contaId)?.tipo ?? '';
+  }
+
 
   salvarLancamento(): void {
-    
-   // if (this.form.invalid) return;
+    if (this.form.invalid || this.salvando) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.salvando = true;
+    this.mensagemErro = '';
+    this.mensagemSucesso = '';
     const val = this.form.value;
-    console.log(val);
+    let requisicao: Observable<unknown>;
+
     if (this.tipoModal === 'TRANSFERENCIA') {
-      const sucesso = this.lancamentoService.realizarTransferencia({
-        bancoContaOrigemId: val.contaId,
+      requisicao = this.lancamentoService.realizarTransferencia({
+        contaOrigemId: val.bancoContaId,
         bancoContaDestinoId: val.contaDestinoId,
         valor: +val.valor,
         data: val.data,
@@ -299,18 +284,11 @@ export class LancamentosComponent implements OnInit, OnDestroy {
         descricao: val.descricao,
         investimentoId: val.investimentoId || undefined,
       });
-
-    
-
-      //if (!sucesso) {
-      //  this.erroTransferencia = 'Saldo insuficiente ou contas inválidas.';
-      //  return;
-     // }
     } else {
       if (this.isEditando && this.lancamentoIdEditando) {
-        this.lancamentoService.atualizarLancamento({
+        requisicao = this.lancamentoService.atualizarLancamento({
           id: this.lancamentoIdEditando,
-          bancoContaId: val.contaId,
+          bancoContaId: val.bancoContaId,
           tipo: this.tipoModal,          
           categoria: val.categoria,
           valor: +val.valor,
@@ -319,9 +297,8 @@ export class LancamentosComponent implements OnInit, OnDestroy {
           observacao: val.observacao || undefined,
         });
       } else {
-        console.log(val);
-        this.lancamentoService.adicionarLancamento({
-          bancoContaId: val.contaId,
+        requisicao = this.lancamentoService.adicionarLancamento({
+          bancoContaId: val.bancoContaId,
           tipo: this.tipoModal,
           categoria: val.categoria,
           valor: +val.valor,
@@ -332,34 +309,36 @@ export class LancamentosComponent implements OnInit, OnDestroy {
       }
     }
 
-   // this.fecharModal();
+    requisicao.subscribe({
+      next: () => {
+        this.salvando = false;
+        this.mensagemSucesso = this.isEditando
+          ? 'Lançamento atualizado com sucesso.'
+          : 'Lançamento salvo com sucesso.';
+        this.carregarPagina();
+      },
+      error: (erro: HttpErrorResponse) => {
+        this.salvando = false;
+        this.mensagemErro = this.obterMensagemErro(erro, 'Não foi possível salvar o lançamento.');
+      }
+    });
   }
 
-  getContaNome(contaId: number): string {
-    const conta = this.contas.find(c => c.id === contaId);
-    return conta ? conta.descricao : contaId + "-";
+  private obterMensagemErro(erro: HttpErrorResponse, mensagemPadrao: string): string {
+    const mensagem = typeof erro.error === 'string'
+      ? erro.error
+      : erro.error?.message || erro.error?.mensagem;
+
+    return mensagem || erro.message || mensagemPadrao;
   }
 
-  getBancoNome(contaId: number): string {
-    const conta = this.contas.find(c => c.id === contaId);
-    if (!conta) return '';
-    const banco = this.bancos.find(b => b.id === conta.bancoId);
-    return banco ? banco.nome : '';
+  get categoriasForm(): string[] {
+    return this.tipoModal === 'CREDITO' ? this.categoriasCredito : this.categoriasDebito;
   }
 
-  getContaTipo(contaId: number): string {
-    return this.contas.find(c => c.id === contaId)?.tipo ?? '';
-  }
-
-  getBancoCor(contaId: number): string {
-    const conta = this.contas.find(c => c.id === contaId);
-    if (!conta) return '#888';
-    return this.bancos.find(b => b.id === conta.bancoId)?.cor ?? '#888';
-  }
+  
 
 
 
-  ngOnDestroy(): void {
-    this.subs.unsubscribe();
-  }
+
 }

@@ -13,6 +13,13 @@ export class VinculoService {
     this.http.get<Vinculo[]>(this.apiUrl).subscribe({ next: vinculos => this.vinculos$.next(vinculos), error: () => undefined });
   }
 
+
+  listarVinculosPorCompetencia(competencia : string): Observable<Vinculo[]>{
+    return this.http.get<Vinculo[]>(`${this.apiUrl}/${competencia}`);
+  }
+
+
+
   getVinculos(): Observable<Vinculo[]> {
     return this.vinculos$.asObservable();
   }

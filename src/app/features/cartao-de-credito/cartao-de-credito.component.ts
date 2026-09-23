@@ -4,7 +4,7 @@ import { forkJoin, Subscription } from 'rxjs';
 import { Banco } from '../../core/models/banco.model';
 import { Conta } from '../../core/models/conta.model';
 import { Cartao } from '../../core/models/cartao.model';
-import { CATEGORIAS_DEBITO } from '../../core/models/lancamento.model';
+
 import { LancamentoCartao } from '../../core/models/lancamento-cartao.model';
 import { BancoService } from '../../core/services/banco.service';
 import { ContaService } from '../../core/services/conta.service';
@@ -37,7 +37,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   fechamentoAnterior = '';
   fechamentoAtual = '';
   proximoFechamento = '';
-  categorias: string[] = CATEGORIAS_DEBITO.slice();
+  categorias: string[] = [];
   showModal = false;
   showCadastroCartao = false;
   isEditandoCartao = false;

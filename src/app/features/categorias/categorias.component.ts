@@ -62,6 +62,9 @@ export class CategoriasComponent implements OnInit, OnDestroy {
     this.fecharModal();
   }
 
+  
+
+
   alternarStatus(categoria: Categoria): void {
     this.categoriaService.alterarStatus(categoria.id!, categoria.ativo === 'SIM' ? 'NAO' : 'SIM');
   }

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { BehaviorSubject, Observable, tap } from 'rxjs';
+import { BehaviorSubject, Observable, throwError, tap } from 'rxjs';
 import { Lancamento } from '../models/lancamento.model';
 import { ContaService } from './conta.service';
 import { VinculoService } from './vinculo.service';
@@ -19,6 +19,11 @@ export class LancamentoService {
   private lancamentos$ = new BehaviorSubject<Lancamento[]>([]);
 
   constructor(private vinculoService: VinculoService,  private contaService: ContaService, private http: HttpClient) {
+    
+  }
+
+
+  getListarLancamento(){
     const { dataInicio, dataFim } = this.periodoMesVigente();
     this.buscarPagina(dataInicio, dataFim).subscribe({ error: () => undefined });
   }
@@ -42,7 +47,7 @@ export class LancamentoService {
     if (contaId) {
       params = params.set('contaId', contaId);
     }
-
+    console.log(params);
     return this.http.get<Lancamento[]>(this.apiUrl, { params }).pipe(
       tap(resultado => {
 
@@ -69,9 +74,9 @@ export class LancamentoService {
     return this.lancamentos$.getValue().filter(l => l.bancoContaId === bancoContaId);
   }
 
-  adicionarLancamento(lancamento: Omit<Lancamento, 'id' | 'saldoApos'>): void {
+  adicionarLancamento(lancamento: Omit<Lancamento, 'id' | 'saldoApos'>): Observable<Lancamento> {
     const conta = this.vinculoService.getVinculoById(lancamento.bancoContaId);
-    if (!conta) return;
+    if (!conta) return throwError(() => new Error('Conta de origem não encontrada.'));
 
     const novoSaldo = lancamento.tipo === 'CREDITO'
       ? conta.saldo + lancamento.valor
@@ -83,32 +88,32 @@ export class LancamentoService {
       saldoApos: novoSaldo,
     };
 
-    this.http.post<Lancamento>(this.apiUrl, novoLancamento).subscribe({
-      next: salvo => {
+    return this.http.post<Lancamento>(this.apiUrl, novoLancamento).pipe(
+      tap(salvo => {
         this.lancamentos$.next([salvo, ...this.lancamentos$.getValue()]);
         this.contaService.atualizarSaldo(lancamento.bancoContaId, novoSaldo);
-      }
-    });
+      })
+    );
   }
 
-  atualizarLancamento(lancamento: Lancamento): void {
+  atualizarLancamento(lancamento: Lancamento): Observable<Lancamento> {
     const oldLancamento = this.getLancamentosSnapshot().find(l => l.id === lancamento.id);
-    if (!oldLancamento) return;
+    if (!oldLancamento) return throwError(() => new Error('Lançamento não encontrado.'));
 
     const conta = this.contaService.getContaById(lancamento.bancoContaId);
-    if (!conta) return;
+    if (!conta) return throwError(() => new Error('Conta do lançamento não encontrada.'));
 
     let saldoTemp = oldLancamento.tipo === 'CREDITO' ? conta.saldo - oldLancamento.valor : conta.saldo + oldLancamento.valor;
     let novoSaldo = lancamento.tipo === 'CREDITO' ? saldoTemp + lancamento.valor : saldoTemp - lancamento.valor;
 
     const atualizado = { ...lancamento, saldoApos: novoSaldo };
     const lancamentos = this.getLancamentosSnapshot().map(l => l.id === lancamento.id ? atualizado : l);
-    this.http.put<Lancamento>(`${this.apiUrl}/${lancamento.id}`, atualizado).subscribe({
-      next: salvo => {
+    return this.http.put<Lancamento>(`${this.apiUrl}/${lancamento.id}`, atualizado).pipe(
+      tap(salvo => {
         this.lancamentos$.next(lancamentos.map(item => item.id === salvo.id ? salvo : item));
         this.contaService.atualizarSaldo(lancamento.bancoContaId, novoSaldo);
-      }
-    });
+      })
+    );
   }
 
   removerLancamento(id?: number): void {
@@ -168,7 +173,7 @@ export class LancamentoService {
     });
   }
 
-  realizarTransferencia(transferencia: any): boolean {
+  realizarTransferencia(transferencia: any): Observable<any> {
    // const origem = this.contaService.getContaById(transferencia.contaOrigemId);
    // const destino = this.contaService.getContaById(transferencia.contaDestinoId);
 
@@ -177,18 +182,16 @@ export class LancamentoService {
 
     const transferenciaId = 't' + Date.now();
 
-    this.http.post<any>('http://localhost:8080/api/transferencias', { ...transferencia, id: transferenciaId }).subscribe({
-      next: salvo => {
+    return this.http.post<any>('http://localhost:8080/api/transferencias', { ...transferencia, id: transferenciaId }).pipe(
+      tap(salvo => {
         const valor = transferencia.valor;
         const debito: Lancamento = {  bancoContaId: transferencia.contaOrigemId, tipo: 'DEBITO', observacao: transferencia.observacao, categoria: 'Transferência Enviada', valor, data: transferencia.data,  transferenciaId: salvo.id };
         const credito: Lancamento = {  bancoContaId: transferencia.contaDestinoId, tipo: 'CREDITO', observacao: transferencia.observacao, categoria: 'Transferência Recebida', valor, data: transferencia.data, transferenciaId: salvo.id };
         this.lancamentos$.next([debito, credito, ...this.getLancamentosSnapshot()]);
         this.contaService.atualizarSaldo(transferencia.contaOrigemId, transferencia.saldoOrigem - valor);
         this.contaService.atualizarSaldo(transferencia.contaDestinoId, transferencia.saldoDestino + valor);
-      }
-    });
-
-    return true;
+      })
+    );
   }
 
   private formatarData(data: Date): string {

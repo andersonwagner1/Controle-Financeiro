@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject } from 'rxjs';
-import { CATEGORIAS_CREDITO, CATEGORIAS_DEBITO } from '../models/lancamento.model';
+
 import { Categoria, StatusCategoria, TipoCategoria } from '../models/categoria.model';
 
 const STORAGE_KEY = 'controle-financeiro-categorias';

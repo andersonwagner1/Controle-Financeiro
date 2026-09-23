@@ -15,10 +15,3 @@ export interface Lancamento {
   investimentoId?: number;
 }
 
-export const CATEGORIAS_CREDITO = [
- 
-];
-
-export const CATEGORIAS_DEBITO = [
-
-];

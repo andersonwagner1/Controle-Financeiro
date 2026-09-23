@@ -3,6 +3,22 @@
   gap: 0.75rem;
 }
 
+.alert-success,
+.alert-danger {
+  padding: 0.75rem;
+  border-radius: 6px;
+}
+
+.alert-success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.alert-danger {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
 .modal-body {
   display: flex;
   flex-direction: column;

@@ -156,8 +156,8 @@
           </td>
           <td style="text-align:center">
             <div style="display:flex;gap:4px;justify-content:center;">
-              <button class="btn btn-ghost btn-sm" (click)="editarLancamento(l)" title="Editar" [disabled]="l.transferenciaId">✏️</button>
-              <button class="btn btn-ghost btn-sm" style="color:var(--danger)" (click)="excluirLancamento(l)" title="Excluir" [disabled]="l.transferenciaId">🗑️</button>
+              <!--<button class="btn btn-ghost btn-sm" (click)="editarLancamento(l)" title="Editar" [disabled]="l.transferenciaId">✏️</button>-->
+              <!--<button class="btn btn-ghost btn-sm" style="color:var(--danger)" (click)="excluirLancamento(l)" title="Excluir" [disabled]="l.transferenciaId">🗑️</button>-->
             </div>
           </td>
         </tr>
@@ -191,6 +191,12 @@
     
     <form class="modal-form" [formGroup]="form" (ngSubmit)="salvarLancamento()">
       <div class="modal-body">
+        <div class="alert-success" *ngIf="mensagemSucesso">
+          {{ mensagemSucesso }}
+        </div>
+        <div class="alert-danger" *ngIf="mensagemErro">
+          {{ mensagemErro }}
+        </div>
         
         <div class="form-group">
           <label class="form-label">{{ tipoModal === 'TRANSFERENCIA' ? 'Conta de Origem *' : 'Conta *' }}</label>
@@ -248,7 +254,7 @@
 
         <div class="form-group" *ngIf="tipoModal === 'TRANSFERENCIA'">
           <label class="checkbox-label">
-            <input type="checkbox" formControlName="aplicacao" (change)="alterarAplicacao()" />
+            <!--<input type="checkbox" formControlName="aplicacao" (change)="alterarAplicacao()" />-->
             <span>APLICAÇÃO/RESGATE</span>
           </label>
         </div>
@@ -281,10 +287,6 @@
           </div>        
         </div>
 
-        <div class="alert-danger" *ngIf="tipoModal === 'TRANSFERENCIA' && erroTransferencia">
-          {{ erroTransferencia }}
-        </div>
-
         <div class="form-group" *ngIf="tipoModal !== 'TRANSFERENCIA'">
           <label class="form-label">Categoria *</label>
           <select class="form-control" formControlName="categoria">
@@ -301,12 +303,12 @@
       
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost" (click)="fecharModal()">Cancelar</button>
-        <button type="submit" class="btn"  (click)="salvarLancamento()" [class.btn-success]="tipoModal==='CREDITO'" [class.btn-danger]="tipoModal==='DEBITO'" [disabled]="form.invalid">
+        <button type="submit" class="btn"   [class.btn-success]="tipoModal==='CREDITO'" [class.btn-danger]="tipoModal==='DEBITO'" [disabled]="form.invalid || salvando">
           <ng-container *ngIf="tipoModal !== 'TRANSFERENCIA'">
-            {{ isEditando ? 'Salvar Alterações' : 'Registrar ' + (tipoModal === 'CREDITO' ? 'Crédito' : 'Débito') }}
+            {{ salvando ? 'Salvando...' : (isEditando ? 'Salvar Alterações' : 'Registrar ' + (tipoModal === 'CREDITO' ? 'Crédito' : 'Débito')) }}
           </ng-container>
           <ng-container *ngIf="tipoModal === 'TRANSFERENCIA'">
-            Registrar Transferência
+            {{ salvando ? 'Salvando...' : 'Registrar Transferência' }}
           </ng-container>
         </button>
       </div>
