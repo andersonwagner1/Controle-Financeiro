@@ -147,8 +147,8 @@
           <td><span class="cat-chip">{{ l.categoria }}</span></td>
           <td class="text-muted" style="font-size:0.82rem">{{ l.observacao || '—' }}</td>
           <td style="text-align:right">
-            <span class="valor-cell" [class.text-success]="l.tipo==='CREDITO'" [class.text-danger]="l.tipo==='DEBITO'">
-              {{ l.tipo === 'CREDITO' ? '+' : '-' }}{{ l.valor | currencyBr }}
+            <span class="valor-cell" [class.text-success]="(l.valor > 0.0)" [class.text-danger]="(l.valor < 0.0)">
+              {{ l.valor > 0.0 ? '+' : '' }}{{ l.valor | currencyBr }}
             </span>
           </td>
           <td style="text-align:right" class="text-secondary" style="font-size:0.82rem">
@@ -200,7 +200,7 @@
         
         <div class="form-group">
           <label class="form-label">{{ tipoModal === 'TRANSFERENCIA' ? 'Conta de Origem *' : 'Conta *' }}</label>
-          <select class="form-control" formControlName="bancoContaId">
+          <select class="form-control" formControlName="bancoContaId" >
 
              <ng-container *ngFor="let b of bancos">
                   <optgroup *ngIf="getContasDisponiveisPorBanco(b.id).length > 0" [label]="b.nome">
@@ -233,7 +233,7 @@
 
         <div class="form-group" *ngIf="tipoModal === 'TRANSFERENCIA'">
           <label class="form-label">Conta de Destino *</label>
-          <select class="form-control" formControlName="contaDestinoId">
+          <select class="form-control" formControlName="bancoContaDestinoId" (change)="listarAplicacoesPorBancoConta()">
                <ng-container *ngFor="let b of bancos">
                   <optgroup *ngIf="getContasDisponiveisPorBanco(b.id).length > 0" [label]="b.nome">
                   <option *ngFor="let c of getContasDisponiveisPorBanco(b.id)" [value]="c.id">
@@ -253,13 +253,30 @@
         </div>
 
         <div class="form-group" *ngIf="tipoModal === 'TRANSFERENCIA'">
-          <label class="checkbox-label">
-            <!--<input type="checkbox" formControlName="aplicacao" (change)="alterarAplicacao()" />-->
-            <span>APLICAÇÃO/RESGATE</span>
-          </label>
+          <label class="form-label">Tipo de operação</label>
+          <div class="operation-select" role="group" aria-label="Tipo de operação">
+            <button type="button" class="operation-option"
+              [class.active]="form.get('tipoTransferencia')?.value === 'TRANSFERENCIA'"
+              [attr.aria-pressed]="form.get('tipoTransferencia')?.value === 'TRANSFERENCIA'"
+              (click)="selecionarTipoTransferencia('TRANSFERENCIA')">
+              Transferência
+            </button>
+            <button type="button" class="operation-option"
+              [class.active]="form.get('tipoTransferencia')?.value === 'APLICACAO'"
+              [attr.aria-pressed]="form.get('tipoTransferencia')?.value === 'APLICACAO'"
+              (click)="selecionarTipoTransferencia('APLICACAO')">
+              Aplicação
+            </button>
+            <button type="button" class="operation-option"
+              [class.active]="form.get('tipoTransferencia')?.value === 'RESGATE'"
+              [attr.aria-pressed]="form.get('tipoTransferencia')?.value === 'RESGATE'"
+              (click)="selecionarTipoTransferencia('RESGATE')">
+              Resgate
+            </button>
+          </div>
         </div>
 
-        <div class="form-group" *ngIf="tipoModal === 'TRANSFERENCIA'">
+        <div class="form-group" *ngIf="tipoModal === 'TRANSFERENCIA' && form.get('tipoTransferencia')?.value !== 'TRANSFERENCIA'">
           <label class="form-label">Investimento</label>
           <select class="form-control" formControlName="investimento">
 
@@ -270,9 +287,7 @@
               {{ investimento.nome }}
             </option>
           </select>
-          <small class="form-hint" *ngIf="!form.get('aplicacao')?.value">
-            Marque “APLICAÇÃO/RESGATE” para selecionar um investimento.
-          </small>
+          <small class="form-hint">Selecione o investimento relacionado à operação.</small>
         </div>
        
 

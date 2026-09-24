@@ -28,9 +28,9 @@ export class InvestimentoService {
     return this.investimentos$.asObservable();
   }
 
-  getInvestimentosAtivos(): Observable<Investimento[]> {
-    return this.getInvestimentos().pipe(
-      map(investimentos => investimentos.filter(investimento => investimento.ativo !== false))
+  getInvestimentosAtivos(bancoContaId : number): Observable<Investimento[]> {
+     return this.http.get<Investimento[]>(`${this.apiUrl}/listar-por-banco/${bancoContaId}`).pipe(
+      tap(investimentos => this.investimentos$.next(investimentos))
     );
   }
 

@@ -180,16 +180,16 @@ export class LancamentoService {
     //if (!origem || !destino) return false;
     //if (origem.saldo < transferencia.valor) return false;
 
-    const transferenciaId = 't' + Date.now();
 
-    return this.http.post<any>('http://localhost:8080/api/transferencias', { ...transferencia, id: transferenciaId }).pipe(
-      tap(salvo => {
-        const valor = transferencia.valor;
-        const debito: Lancamento = {  bancoContaId: transferencia.contaOrigemId, tipo: 'DEBITO', observacao: transferencia.observacao, categoria: 'Transferência Enviada', valor, data: transferencia.data,  transferenciaId: salvo.id };
-        const credito: Lancamento = {  bancoContaId: transferencia.contaDestinoId, tipo: 'CREDITO', observacao: transferencia.observacao, categoria: 'Transferência Recebida', valor, data: transferencia.data, transferenciaId: salvo.id };
-        this.lancamentos$.next([debito, credito, ...this.getLancamentosSnapshot()]);
-        this.contaService.atualizarSaldo(transferencia.contaOrigemId, transferencia.saldoOrigem - valor);
-        this.contaService.atualizarSaldo(transferencia.contaDestinoId, transferencia.saldoDestino + valor);
+    return this.http.post<any>('http://localhost:8080/api/transferencias',  transferencia ).pipe(
+      tap(() => {
+        
+        //const valor = transferencia.valor;
+        //const debito: Lancamento = {  bancoContaId: transferencia.contaOrigemId, tipo: 'DEBITO', observacao: transferencia.observacao, categoria: 'Transferência Enviada', valor, data: transferencia.data,  transferenciaId: salvo.id };
+        //const credito: Lancamento = {  bancoContaId: transferencia.contaDestinoId, tipo: 'CREDITO', observacao: transferencia.observacao, categoria: 'Transferência Recebida', valor, data: transferencia.data, transferenciaId: salvo.id };
+       // this.lancamentos$.next([debito, credito, ...this.getLancamentosSnapshot()]);
+        //this.contaService.atualizarSaldo(transferencia.contaOrigemId, transferencia.saldoOrigem - valor);
+        //this.contaService.atualizarSaldo(transferencia.contaDestinoId, transferencia.saldoDestino + valor);
       })
     );
   }

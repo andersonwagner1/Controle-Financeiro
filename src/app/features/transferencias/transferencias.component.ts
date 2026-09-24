@@ -92,15 +92,19 @@ export class TransferenciasComponent implements OnInit, OnDestroy {
   }
 
   realizarTransferencia(): void {
+    console.log("realizarTransferencia");
     if (this.form.invalid) return;
     const val = this.form.value;
-
+console.log("realizarTransferencia");
+    
+    console.log(val);
     const sucesso = this.lancamentoService.realizarTransferencia({
-      contaOrigemId: val.contaOrigemId,
-      contaDestinoId: val.contaDestinoId,
+      bancoContaId: val.contaOrigemId,
+      bancoContaDestinoId: val.contaDestinoId,
       valor: +val.valor,
       data: val.data,
-      descricao: val.descricao,
+      observacao: val.descricao,
+      tipoTransferencia: val.tipo
     });
 
     if (sucesso) {

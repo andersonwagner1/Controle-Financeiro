@@ -58,7 +58,7 @@ export class LancamentosComponent implements OnInit {
     });
 
     this.categoriaService.getCategorias().subscribe(categorias =>{
-      console.log(categorias);
+      
       this.categoriasCredito = categorias
           .filter(t => t.tipo === 'CREDITO')
           .map(t => t.nome);
@@ -72,7 +72,7 @@ export class LancamentosComponent implements OnInit {
      this.form = this.fb.group({
       bancoContaId: ['', Validators.required],
       bancoContaDestinoId: [''], // Only used for transfers
-      aplicacao: [false],
+      tipoTransferencia: ['TRANSFERENCIA'],
       investimento: [{ value: '', disabled: true }],
       
       categoria: [''], // Will be dynamically validated if not transfer
@@ -120,21 +120,21 @@ export class LancamentosComponent implements OnInit {
     this.form.reset({
       data: new Date().toISOString().split('T')[0],
       competencia: this.filtroCompetencia,
-      contaDestinoId: '',
-      aplicacao: false,
+      bancoContaDestinoId: '',
+      tipoTransferencia: 'TRANSFERENCIA',
       investimento: ''
     });
-    //this.alterarAplicacao();
+    this.alterarAplicacao();
 
     if (tipo === 'TRANSFERENCIA') {
       this.form.get('categoria')?.clearValidators();
-      this.form.get('contaDestinoId')?.setValidators(Validators.required);
+      this.form.get('bancoContaDestinoId')?.setValidators(Validators.required);
     } else {
       this.form.get('categoria')?.setValidators(Validators.required);
-      this.form.get('contaDestinoId')?.clearValidators();
+      this.form.get('bancoContaDestinoId')?.clearValidators();
     }
     this.form.get('categoria')?.updateValueAndValidity();
-    this.form.get('contaDestinoId')?.updateValueAndValidity();
+    this.form.get('bancoContaDestinoId')?.updateValueAndValidity();
 
     this.showModal = true;
 
@@ -203,20 +203,44 @@ export class LancamentosComponent implements OnInit {
       const naoFechadaNaCompetencia = !conta.dataFechamento || conta.dataFechamento >= inicio;
       return conta.ativa && abertaNaCompetencia && naoFechadaNaCompetencia;
     });
-
-
-    
-
   }
 
+
+
+
+    selecionarTipoTransferencia(tipo: 'TRANSFERENCIA' | 'APLICACAO' | 'RESGATE'): void {
+      this.form.get('tipoTransferencia')?.setValue(tipo);
+      this.alterarAplicacao();
+    }
+
+    alterarAplicacao(): void {
+    const investimento = this.form.get('investimento');
+    if (this.form.get('tipoTransferencia')?.value !== 'TRANSFERENCIA') {
+      investimento?.enable();
+    } else {
+      investimento?.reset('');
+      investimento?.disable();
+    }
+  }
 
     alterarMesCompetencia(offset: number): void {
-      console.log("1");
-    const [ano, mes] = this.filtroCompetencia.split('-').map(Number);
-    const novaCompetencia = new Date(ano, mes - 1 + offset, 1);
-    this.filtroCompetencia = `${novaCompetencia.getFullYear()}-${String(novaCompetencia.getMonth() + 1).padStart(2, '0')}`;
-    this.alterarCompetencia();
-  }
+      
+      const [ano, mes] = this.filtroCompetencia.split('-').map(Number);
+      const novaCompetencia = new Date(ano, mes - 1 + offset, 1);
+      this.filtroCompetencia = `${novaCompetencia.getFullYear()}-${String(novaCompetencia.getMonth() + 1).padStart(2, '0')}`;
+      this.alterarCompetencia();
+    }
+
+
+    listarAplicacoesPorBancoConta(){
+      let val = this.form.value;
+
+       this.investimentoService.getInvestimentosAtivos(val.bancoContaDestinoId).subscribe(investimentos => {
+          this.investimentos = investimentos;
+             console.log(investimentos);
+        });
+    }
+
 
   alterarPagina(offset: number): void {
     const pagina = this.paginaAtual + offset;
@@ -275,14 +299,16 @@ export class LancamentosComponent implements OnInit {
     let requisicao: Observable<unknown>;
 
     if (this.tipoModal === 'TRANSFERENCIA') {
+      
+
       requisicao = this.lancamentoService.realizarTransferencia({
-        contaOrigemId: val.bancoContaId,
-        bancoContaDestinoId: val.contaDestinoId,
+        bancoContaId: val.bancoContaId,
+        bancoContaDestinoId: val.bancoContaDestinoId,
         valor: +val.valor,
         data: val.data,
-        competencia: val.competencia,
-        descricao: val.descricao,
-        investimentoId: val.investimentoId || undefined,
+        observacao: val.observacao,
+        investimento: val.investimento || undefined,
+        tipoTransferencia: val.tipoTransferencia
       });
     } else {
       if (this.isEditando && this.lancamentoIdEditando) {
