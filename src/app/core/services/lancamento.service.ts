@@ -103,7 +103,7 @@ export class LancamentoService {
     const conta = this.contaService.getContaById(lancamento.bancoContaId);
     if (!conta) return throwError(() => new Error('Conta do lançamento não encontrada.'));
 
-    let saldoTemp = oldLancamento.tipo === 'CREDITO' ? conta.saldo - oldLancamento.valor : conta.saldo + oldLancamento.valor;
+    let saldoTemp = oldLancamento.tipo === 'CREDITO' ? conta!.saldo - oldLancamento.valor : conta!.saldo + oldLancamento.valor;
     let novoSaldo = lancamento.tipo === 'CREDITO' ? saldoTemp + lancamento.valor : saldoTemp - lancamento.valor;
 
     const atualizado = { ...lancamento, saldoApos: novoSaldo };

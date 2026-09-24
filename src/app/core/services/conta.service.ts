@@ -41,13 +41,7 @@ export class ContaService {
 
   getContasSnapshot(): Conta[] {
     const vinculos = this.vinculoService.getVinculosSnapshot();
-
-    console.log(vinculos);
-
-
     const contasBase = this.contaBaseService.getContasBaseSnapshot();
-
-    
     return vinculos.map(v => {
       const cb = contasBase.find(c => c.id === v.contaBaseId);
       return {

@@ -362,6 +362,33 @@ export class LancamentosComponent implements OnInit {
     return this.tipoModal === 'CREDITO' ? this.categoriasCredito : this.categoriasDebito;
   }
 
+
+  editarLancamento(lancamento: Lancamento): void {
+    
+    this.isEditando = true;
+    this.lancamentoIdEditando = lancamento.id == undefined ? 0  :lancamento.id;
+    this.tipoModal = lancamento.tipo; // For edits, we only support credito/debito for now
+    this.form.get('categoria')?.setValidators(Validators.required);
+    this.form.get('bancoContaDestinoId')?.clearValidators();
+    this.form.get('categoria')?.updateValueAndValidity();
+    this.form.get('bancoContaDestinoId')?.updateValueAndValidity();
+
+    this.form.patchValue({
+      bancoContaId: lancamento.bancoContaId,      
+      categoria: lancamento.categoria,
+      valor: lancamento.valor,
+      data: lancamento.data,
+      
+      observacao: lancamento.observacao
+    });
+    this.showModal = true;
+  }
+
+  excluirLancamento(lancamento: Lancamento): void {
+    if (confirm(`Tem certeza que deseja excluir o lançamento "${lancamento.categoria}"?`)) {
+      this.lancamentoService.removerLancamento(lancamento.id);
+    }
+  }
   
 
 
