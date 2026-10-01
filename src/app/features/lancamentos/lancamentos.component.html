@@ -24,11 +24,27 @@
         </svg>
         Transferência
       </button>
+      <button class="btn btn-primary" (click)="atualizarMovimentacao()" [disabled]="filtroConta === 'todas' || processandoAcao">
+        {{ processandoAcao ? 'Atualizando...' : 'Atualizar' }}
+      </button>
+      <button class="btn btn-ghost" (click)="abrirModalSaldo()" [disabled]="filtroConta === 'todas' || processandoAcao">
+        Saldo
+      </button>
     </div>
   </div>
 
+  <div class="alert-success" *ngIf="mensagemAcaoSucesso">{{ mensagemAcaoSucesso }}</div>
+  <div class="alert-danger" *ngIf="mensagemAcaoErro">{{ mensagemAcaoErro }}</div>
+
   <!-- Summary cards -->
   <div class="summary-row">
+    <div class="summary-card summary-card--credito">
+      <div class="summary-icon">↑</div>
+      <div>
+        <div class="summary-label">Saldo Inicial</div>
+        <div class="summary-val text-success">{{ saldoInicial | currencyBr }}</div>
+      </div>
+    </div>
     <div class="summary-card summary-card--credito">
       <div class="summary-icon">↑</div>
       <div>
@@ -48,7 +64,7 @@
       <div>
         <div class="summary-label">Saldo (filtrado)</div>
         <div class="summary-val" [class.text-success]="(totalCreditos-totalDebitos)>=0" [class.text-danger]="(totalCreditos-totalDebitos)<0">
-          {{ (totalCreditos-totalDebitos) | currencyBr }}
+          {{ (saldoInicial +totalCreditos-totalDebitos) | currencyBr }}
         </div>
       </div>
     </div>
@@ -138,13 +154,13 @@
             <div class="conta-cell">
               <div class="conta-dot" [style.background]="getBancoCor(l.bancoContaId)"></div>
               <div>
-                <div class="conta-nome">{{ getContaNome(l.bancoContaId) }}</div>
+                <div class="conta-nome">{{ l.conta }}</div>
                 <span class="badge-tipo badge-{{ getContaTipo(l.bancoContaId) }}" style="font-size:0.68rem">{{ getContaTipo(l.bancoContaId) }}</span>
               </div>
             </div>
           </td>
-          <td class="text-secondary">{{ getBancoNome(l.bancoContaId) }}</td>
-          <td><span class="cat-chip">{{ l.categoria }}</span></td>
+          <td class="text-secondary">{{ l.banco }} - {{l.id}}</td>
+          <td><span class="cat-chip">{{ l.tipoMovimentacao }}</span></td>
           <td class="text-muted" style="font-size:0.82rem">{{ l.observacao || '—' }}</td>
           <td style="text-align:right">
             <span class="valor-cell" [class.text-success]="(l.valor > 0.0)" [class.text-danger]="(l.valor < 0.0)">
@@ -152,7 +168,7 @@
             </span>
           </td>
           <td style="text-align:right" class="text-secondary" style="font-size:0.82rem">
-            {{ l.saldoApos | currencyBr }}
+            {{ l.saldo | currencyBr }}
           </td>
           <td style="text-align:center">
             <div style="display:flex;gap:4px;justify-content:center;">
@@ -173,6 +189,24 @@
       <button class="btn btn-ghost btn-sm" (click)="alterarPagina(-1)" [disabled]="paginaAtual === 0">Anterior</button>
       <span>Página {{ paginaAtual + 1 }} de {{ totalPaginas }}</span>
       <button class="btn btn-ghost btn-sm" (click)="alterarPagina(1)" [disabled]="paginaAtual + 1 >= totalPaginas">Próxima</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de confirmação de exclusão -->
+<div class="modal-overlay" *ngIf="showConfirmacaoExclusao" (click)="cancelarExclusao()">
+  <div class="modal-box delete-confirmation" role="dialog" aria-modal="true" aria-labelledby="titulo-confirmacao-exclusao" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="titulo-confirmacao-exclusao">Excluir lançamento?</h3>
+      <button type="button" class="modal-close" (click)="cancelarExclusao()" aria-label="Fechar">×</button>
+    </div>
+    <p class="delete-confirmation-text">
+      Deseja realmente excluir o lançamento
+      <strong>{{ lancamentoParaExcluir?.tipoMovimentacao }}</strong>?
+    </p>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" (click)="cancelarExclusao()">Cancelar</button>
+      <button type="button" class="btn btn-danger" (click)="confirmarExclusao()">Excluir</button>
     </div>
   </div>
 </div>
@@ -304,9 +338,9 @@
 
         <div class="form-group" *ngIf="tipoModal !== 'TRANSFERENCIA'">
           <label class="form-label">Categoria *</label>
-          <select class="form-control" formControlName="categoria">
+          <select class="form-control" formControlName="tipoMovimentacaoId">
             <option value="">Selecione...</option>
-            <option *ngFor="let cat of categoriasForm" [value]="cat">{{ cat }}</option>
+            <option *ngFor="let cat of categoriasForm" [value]="cat.id">{{ cat.nome }}</option>
           </select>
         </div>
 
@@ -328,5 +362,25 @@
         </button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Modal de saldo final -->
+<div class="modal-overlay" *ngIf="showSaldoModal" (click)="fecharModalSaldo()">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="titulo-saldo-final" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="titulo-saldo-final">Saldo final</h3>
+      <button type="button" class="modal-close" (click)="fecharModalSaldo()" [disabled]="processandoAcao" aria-label="Fechar">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="saldo-final">Digite o saldo final</label>
+      <input id="saldo-final" class="form-control" type="number" step="0.01" [(ngModel)]="saldoFinalInformado" [disabled]="processandoAcao" autofocus />
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" (click)="fecharModalSaldo()" [disabled]="processandoAcao">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="salvarSaldoFinal()" [disabled]="saldoFinalInformado === null || processandoAcao">
+        {{ processandoAcao ? 'Salvando...' : 'Atualizar saldo' }}
+      </button>
+    </div>
   </div>
 </div>

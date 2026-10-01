@@ -16,6 +16,7 @@ export interface PaginaLancamentos {
 @Injectable({ providedIn: 'root' })
 export class LancamentoService {
   private readonly apiUrl = 'http://localhost:8080/api/lancamentos';
+  private readonly apiBaseUrl = 'http://localhost:8080/api';
   private lancamentos$ = new BehaviorSubject<Lancamento[]>([]);
 
   constructor(private vinculoService: VinculoService,  private contaService: ContaService, private http: HttpClient) {
@@ -28,8 +29,36 @@ export class LancamentoService {
     this.buscarPagina(dataInicio, dataFim).subscribe({ error: () => undefined });
   }
 
+
+
+
   getLancamentos() {
     return this.lancamentos$.asObservable();
+  }
+
+    buscarLancamentosFinal(dataInicio: string,contaId?: number ){
+      let params = new HttpParams()
+      .set('dataInicial', dataInicio)
+      .set('sort', 'data,desc');
+
+      if (contaId) {
+        params = params.set('contaId', contaId);
+      }
+      return this.http.get<any[]>(`${this.apiUrl}/saldo`, { params });
+    }
+
+  atualizarMovimentacaoFinal(bancoContaId: number, dataInicial: string): Observable<unknown> {
+    return this.http.post<unknown>(
+      `${this.apiBaseUrl}/movimentacao-final/atualizar/${bancoContaId}/${dataInicial}`,
+      null
+    );
+  }
+
+  atualizarSaldo(bancoContaId: number, dataInicial: string, saldoFinal: number): Observable<void> {
+    return this.http.post<void>(
+      `${this.apiBaseUrl}/movimentacao-final/atualizar-saldo/${bancoContaId}/${dataInicial}`,
+      saldoFinal
+    );
   }
 
   buscarPagina(dataInicio: string, dataFim: string, page = 0, size = 50, contaId?: number): Observable<Lancamento[]> {
@@ -47,8 +76,8 @@ export class LancamentoService {
     if (contaId) {
       params = params.set('contaId', contaId);
     }
-    console.log(params);
-    return this.http.get<Lancamento[]>(this.apiUrl, { params }).pipe(
+   
+    return this.http.get<Lancamento[]>(`${this.apiUrl}/lista`, { params }).pipe(
       tap(resultado => {
 
         this.lancamentos$.next(resultado);
@@ -85,7 +114,7 @@ export class LancamentoService {
     const novoLancamento: Lancamento = {
       ...lancamento,
       
-      saldoApos: novoSaldo,
+      saldo: novoSaldo,
     };
 
     return this.http.post<Lancamento>(this.apiUrl, novoLancamento).pipe(
@@ -117,15 +146,6 @@ export class LancamentoService {
   }
 
   removerLancamento(id?: number): void {
-    const lancamento = this.getLancamentosSnapshot().find(l => l.id === id);
-    if (!lancamento) return;
-
-    const conta = this.contaService.getContaById(lancamento.bancoContaId);
-    if (conta) {
-      let novoSaldo = lancamento.tipo === 'CREDITO' ? conta.saldo - lancamento.valor : conta.saldo + lancamento.valor;
-      this.contaService.atualizarSaldo(lancamento.bancoContaId, novoSaldo);
-    }
-
     this.http.delete(`${this.apiUrl}/${id}`).subscribe({ next: () => this.lancamentos$.next(this.getLancamentosSnapshot().filter(l => l.id !== id)) });
   }
 

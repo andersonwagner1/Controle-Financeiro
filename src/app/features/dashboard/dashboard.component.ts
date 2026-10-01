@@ -321,11 +321,11 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       .forEach(lancamento => {
         const conta = contaPorId.get(lancamento.bancoContaId);
         if (!conta || !this.ehContaCorrente(conta)) return;
-        const categoria = lancamento.categoria?.trim() || 'Sem categoria';
+        const categoria = lancamento.tipoMovimentacaoId || 'Sem categoria';
         if (lancamento.tipo === 'CREDITO') {
           adicionar(`Crédito · ${categoria}`, 'Conta Corrente', lancamento.valor);
-        } else if (categoria !== 'Cartão de Crédito') {
-          adicionar('Conta Corrente', `Débito direto · ${categoria}`, lancamento.valor);
+       // } else if (categoria !== 'Cartão de Crédito') {
+        //  adicionar('Conta Corrente', `Débito direto · ${categoria}`, lancamento.valor);
         }
       });
 
@@ -337,7 +337,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       .filter(l => {
         const conta = contaPorId.get(l.bancoContaId);
         return l.tipo === 'DEBITO' && !l.transferenciaId && this.ehContaCorrente(conta)
-          && l.categoria === 'Cartão de Crédito' && this.estaNoPeriodoSankey(l.data);
+         /* && l.categoria === 'Cartão de Crédito'*/ && this.estaNoPeriodoSankey(l.data);
       })
       .reduce((total, pagamento) => total + pagamento.valor, 0);
     const fluxoFatura = totalComprasCartao || pagamentosFatura;
@@ -354,19 +354,19 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     return conta?.tipo === 'CC';
   }
 
-  private agruparCategorias(tipo: Lancamento['tipo']): Array<{ categoria: string; valor: number }> {
+ /* private agruparCategorias(tipo: Lancamento['tipo']): Array<{ categoria: string; valor: number }> {
     const totais = new Map<string, number>();
     this.lancamentos
       .filter(l => l.tipo === tipo && !l.transferenciaId && l.valor > 0 && this.estaNoPeriodoSankey(l.data))
       .forEach(l => {
-        const categoria = l.categoria?.trim() || (tipo === 'CREDITO' ? 'Outros créditos' : 'Outros débitos');
+        const categoria = l.categoria || (tipo === 'CREDITO' ? 'Outros créditos' : 'Outros débitos');
         totais.set(categoria, (totais.get(categoria) ?? 0) + l.valor);
       });
 
     return [...totais.entries()]
       .map(([categoria, valor]) => ({ categoria, valor }))
       .sort((a, b) => b.valor - a.valor);
-  }
+  }*/
 
   atualizarPeriodoSankey(): void {
     if (this.dataInicialSankey && this.dataFinalSankey) {

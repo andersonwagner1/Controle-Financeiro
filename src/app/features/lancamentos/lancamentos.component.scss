@@ -205,6 +205,15 @@
   font-size: 0.8rem;
 }
 
+.delete-confirmation-text {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+
+  strong {
+    color: var(--text-primary);
+  }
+}
+
 
 /* --- Correção dos selects e optgroups no Dark/Light Theme --- */
 .filter-select,

@@ -1,8 +1,8 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { BehaviorSubject, Observable, Subscription } from 'rxjs';
-import { LancamentoService, PaginaLancamentos } from '../../core/services/lancamento.service';
+import { Observable } from 'rxjs';
+import { LancamentoService} from '../../core/services/lancamento.service';
 import { ContaService } from '../../core/services/conta.service';
 import { BancoService } from '../../core/services/banco.service';
 
@@ -11,10 +11,8 @@ import { Banco } from '../../core/models/banco.model';
 import { CategoriaService } from '../../core/services/categoria.service';
 import { Investimento } from '../../core/models/investimento.model';
 import { InvestimentoService } from '../../core/services/investimento.service';
-import { VinculoService } from '../../core/services/vinculo.service';
-import { Vinculo } from '../../core/models/vinculo.model';
-import { Categoria } from '../../core/models/categoria.model';
 import { Lancamento } from '../../core/models/lancamento.model';
+import { Categoria } from '../../core/models/categoria.model';
 
 @Component({
   selector: 'app-lancamentos',
@@ -22,16 +20,12 @@ import { Lancamento } from '../../core/models/lancamento.model';
   styleUrls: ['./lancamentos.component.scss']
 })
 export class LancamentosComponent implements OnInit {
-
-
-
-
   lancamentosFiltrados: Lancamento[] = [];
   contas: Conta[] = [];
   bancos: Banco[] = [];
   tiposConta = TIPOS_CONTA;
-  categoriasCredito: string[] = [];
-  categoriasDebito: string[] = [];
+  categoriasCredito: Categoria[] = [];
+  categoriasDebito: Categoria[] = [];
   investimentos: Investimento[] = [];
 
   filtroTipo = 'todos';
@@ -41,6 +35,10 @@ export class LancamentosComponent implements OnInit {
   paginaAtual = 0;
   totalPaginas = 0;
   totalLancamentos = 0;
+
+  saldoInicial = 0;
+  totalCreditos = 0;
+  totalDebitos = 0;
   readonly tamanhoPagina = 50;
 
   showModal = false;
@@ -52,6 +50,13 @@ export class LancamentosComponent implements OnInit {
   mensagemErro = '';
   mensagemSucesso = '';
   salvando = false;
+  showConfirmacaoExclusao = false;
+  lancamentoParaExcluir: Lancamento | null = null;
+  showSaldoModal = false;
+  saldoFinalInformado: number | null = null;
+  processandoAcao = false;
+  mensagemAcaoSucesso = '';
+  mensagemAcaoErro = '';
   ngOnInit(): void {
     this.bancoService.getBancos().subscribe(b=>{
       this.bancos = b
@@ -61,10 +66,23 @@ export class LancamentosComponent implements OnInit {
       
       this.categoriasCredito = categorias
           .filter(t => t.tipo === 'CREDITO')
-          .map(t => t.nome);
+          .map(t => ({
+            nome: t.nome,
+            id: t.id,
+            tipo: 'CREDITO',
+            ativo: 'SIM'
+          }));
+          
       this.categoriasDebito = categorias
           .filter(t => t.tipo === 'DEBITO')
-          .map(t => t.nome);
+          .map(t => (
+            {
+               nome: t.nome,
+            id: t.id,
+            tipo: 'DEBITO',
+            ativo: 'SIM'
+            }
+          ));
           });
 
     this.contaService.getContas().subscribe(c => { this.contas = c; })
@@ -75,13 +93,16 @@ export class LancamentosComponent implements OnInit {
       tipoTransferencia: ['TRANSFERENCIA'],
       investimento: [{ value: '', disabled: true }],
       
-      categoria: [''], // Will be dynamically validated if not transfer
+      tipoMovimentacaoId: [''], // Will be dynamically validated if not transfer
       valor: [null, [Validators.required, Validators.min(0.01)]],
      // data: [new Date().toISOString().split('T')[0], Validators.required],
      data: '2026/09/25',
      
       observacao: [''],
     });/*, { validators: this.validarContasDiferentes })*/
+
+
+     this.carregarPagina();
     
   }
 
@@ -94,21 +115,8 @@ export class LancamentosComponent implements OnInit {
     private bancoService: BancoService,
     private categoriaService: CategoriaService,
     private investimentoService: InvestimentoService,
-    private vinculoService: VinculoService,
-
     private fb: FormBuilder,
   ) {}
-
-
-
-    get totalCreditos(): number {
-    return this.lancamentosFiltrados.filter(l => l.tipo === 'CREDITO').reduce((acc, l) => acc + l.valor, 0);
-  }
-
-  get totalDebitos(): number {
-    return this.lancamentosFiltrados.filter(l => l.tipo === 'DEBITO').reduce((acc, l) => acc + l.valor, 0);
-  }
-
 
   abrirModal(tipo: 'DEBITO' | 'CREDITO' | 'TRANSFERENCIA' | 'APLICACAO' | 'RESGATE'): void {
     this.isEditando = false;
@@ -127,13 +135,13 @@ export class LancamentosComponent implements OnInit {
     this.alterarAplicacao();
 
     if (tipo === 'TRANSFERENCIA') {
-      this.form.get('categoria')?.clearValidators();
+      this.form.get('tipoMovimentacaoId')?.clearValidators();
       this.form.get('bancoContaDestinoId')?.setValidators(Validators.required);
     } else {
-      this.form.get('categoria')?.setValidators(Validators.required);
+      this.form.get('tipoMovimentacaoId')?.setValidators(Validators.required);
       this.form.get('bancoContaDestinoId')?.clearValidators();
     }
-    this.form.get('categoria')?.updateValueAndValidity();
+    this.form.get('tipoMovimentacaoId')?.updateValueAndValidity();
     this.form.get('bancoContaDestinoId')?.updateValueAndValidity();
 
     this.showModal = true;
@@ -147,6 +155,80 @@ export class LancamentosComponent implements OnInit {
       this.showModal = false;
   }
 
+  atualizarMovimentacao(): void {
+    const bancoContaId = this.obterContaSelecionada();
+    if (!bancoContaId || this.processandoAcao) return;
+
+    this.limparMensagensAcao();
+    this.processandoAcao = true;
+    const dataInicial = this.periodoDaCompetencia().dataInicio;
+
+    this.lancamentoService.atualizarMovimentacaoFinal(bancoContaId, dataInicial).subscribe({
+      next: (resposta: unknown) => {
+        this.processandoAcao = false;
+        this.mensagemAcaoSucesso = this.obterMensagemResposta(resposta, 'Movimentações atualizadas com sucesso.');
+        this.carregarPagina();
+      },
+      error: (erro: HttpErrorResponse) => {
+        this.processandoAcao = false;
+        this.mensagemAcaoErro = this.obterMensagemErro(erro, 'Não foi possível atualizar as movimentações.');
+      }
+    });
+  }
+
+  abrirModalSaldo(): void {
+    if (!this.obterContaSelecionada()) return;
+    this.saldoFinalInformado = null;
+    this.limparMensagensAcao();
+    this.showSaldoModal = true;
+  }
+
+  fecharModalSaldo(): void {
+    if (this.processandoAcao) return;
+    this.showSaldoModal = false;
+  }
+
+  salvarSaldoFinal(): void {
+    const bancoContaId = this.obterContaSelecionada();
+    if (!bancoContaId || this.saldoFinalInformado === null || !Number.isFinite(this.saldoFinalInformado) || this.processandoAcao) {
+      return;
+    }
+
+    this.processandoAcao = true;
+    const dataInicial = this.periodoDaCompetencia().dataInicio;
+
+    this.lancamentoService.atualizarSaldo(bancoContaId, dataInicial, this.saldoFinalInformado).subscribe({
+      next: (resposta: unknown) => {
+        this.processandoAcao = false;
+        this.showSaldoModal = false;
+        this.mensagemAcaoSucesso = this.obterMensagemResposta(resposta, 'Saldo atualizado com sucesso.');
+        this.carregarPagina();
+      },
+      error: (erro: HttpErrorResponse) => {
+        this.processandoAcao = false;
+        this.mensagemAcaoErro = this.obterMensagemErro(erro, 'Não foi possível atualizar o saldo.');
+      }
+    });
+  }
+
+  private obterContaSelecionada(): number | null {
+    return this.filtroConta === 'todas' ? null : Number(this.filtroConta);
+  }
+
+  private limparMensagensAcao(): void {
+    this.mensagemAcaoSucesso = '';
+    this.mensagemAcaoErro = '';
+  }
+
+  private obterMensagemResposta(resposta: unknown, mensagemPadrao: string): string {
+    if (typeof resposta === 'string' && resposta.trim()) return resposta;
+    if (resposta && typeof resposta === 'object') {
+      const respostaObj = resposta as { message?: string; mensagem?: string };
+      return respostaObj.message || respostaObj.mensagem || mensagemPadrao;
+    }
+    return mensagemPadrao;
+  }
+
   aplicarFiltros(): void {
   }
 
@@ -155,18 +237,25 @@ export class LancamentosComponent implements OnInit {
   }
 
    private carregarPagina(): void {
-    
     const { dataInicio, dataFim } = this.periodoDaCompetencia();
-
-    
-
     const bancoContaId = this.filtroConta === 'todas' ? undefined : Number(this.filtroConta);
-
     //Adicionar metodo para buscar os lancamentos
+
+    this.lancamentoService.buscarLancamentosFinal(dataInicio, bancoContaId).subscribe({
+      next: (resultado : any) =>{
+        this.saldoInicial =  resultado.vlSaldoInicial;
+        this.totalCreditos=  resultado.vlTotalCredito;
+        this.totalDebitos = resultado.vlTotalDebito;
+      },
+      error: () => {
+
+      }
+    })
 
     this.lancamentoService.buscarPagina(dataInicio, dataFim, this.paginaAtual, this.tamanhoPagina, bancoContaId)
       .subscribe({
         next: (resultado: Lancamento[]) => {
+          console.log("Resultado da busca de lançamentos:", resultado);
           this.lancamentosFiltrados = resultado;
           this.totalLancamentos = resultado.length;
         },
@@ -187,7 +276,7 @@ export class LancamentosComponent implements OnInit {
     return { dataInicio: formatar(inicio), dataFim: formatar(fim) };
   }
 
-    getContasDisponiveisPorBanco(bancoId: number): Conta[] {
+  getContasDisponiveisPorBanco(bancoId: number): Conta[] {
     return this.contasDisponiveis.filter(conta => conta.bancoId === bancoId);
   }
 
@@ -205,9 +294,6 @@ export class LancamentosComponent implements OnInit {
     });
   }
 
-
-
-
     selecionarTipoTransferencia(tipo: 'TRANSFERENCIA' | 'APLICACAO' | 'RESGATE'): void {
       this.form.get('tipoTransferencia')?.setValue(tipo);
       this.alterarAplicacao();
@@ -224,7 +310,6 @@ export class LancamentosComponent implements OnInit {
   }
 
     alterarMesCompetencia(offset: number): void {
-      
       const [ano, mes] = this.filtroCompetencia.split('-').map(Number);
       const novaCompetencia = new Date(ano, mes - 1 + offset, 1);
       this.filtroCompetencia = `${novaCompetencia.getFullYear()}-${String(novaCompetencia.getMonth() + 1).padStart(2, '0')}`;
@@ -249,7 +334,7 @@ export class LancamentosComponent implements OnInit {
     this.carregarPagina();
   }
 
-    alterarCompetencia(): void {
+  alterarCompetencia(): void {
     if (this.filtroConta !== 'todas' && !this.contasDisponiveis.some(conta => conta.id+"" === this.filtroConta)) {
       this.filtroConta = 'todas';
     }
@@ -261,7 +346,7 @@ export class LancamentosComponent implements OnInit {
     return this.periodoDaCompetencia();
   }
 
-    getContaNome(contaId: number): string {
+  getContaNome(contaId: number): string {
     const conta = this.contas.find(c => c.id === contaId);
     return conta ? conta.descricao : contaId + "-";
   }
@@ -296,11 +381,10 @@ export class LancamentosComponent implements OnInit {
     this.mensagemErro = '';
     this.mensagemSucesso = '';
     const val = this.form.value;
+
     let requisicao: Observable<unknown>;
 
     if (this.tipoModal === 'TRANSFERENCIA') {
-      
-
       requisicao = this.lancamentoService.realizarTransferencia({
         bancoContaId: val.bancoContaId,
         bancoContaDestinoId: val.bancoContaDestinoId,
@@ -316,20 +400,18 @@ export class LancamentosComponent implements OnInit {
           id: this.lancamentoIdEditando,
           bancoContaId: val.bancoContaId,
           tipo: this.tipoModal,          
-          categoria: val.categoria,
+          tipoMovimentacaoId: val.tipoMovimentacaoId,
           valor: +val.valor,
-          data: val.data,
-          
-          observacao: val.observacao || undefined,
+          data: val.data  ,          
+          observacao: val.observacao || undefined
         });
       } else {
         requisicao = this.lancamentoService.adicionarLancamento({
           bancoContaId: val.bancoContaId,
           tipo: this.tipoModal,
-          categoria: val.categoria,
+          tipoMovimentacaoId: val.tipoMovimentacaoId,
           valor: +val.valor,
           data: val.data,
-          
           observacao: val.observacao || undefined,
         });
       }
@@ -348,6 +430,8 @@ export class LancamentosComponent implements OnInit {
         this.mensagemErro = this.obterMensagemErro(erro, 'Não foi possível salvar o lançamento.');
       }
     });
+
+    this.carregarPagina();
   }
 
   private obterMensagemErro(erro: HttpErrorResponse, mensagemPadrao: string): string {
@@ -358,8 +442,9 @@ export class LancamentosComponent implements OnInit {
     return mensagem || erro.message || mensagemPadrao;
   }
 
-  get categoriasForm(): string[] {
-    return this.tipoModal === 'CREDITO' ? this.categoriasCredito : this.categoriasDebito;
+  get categoriasForm(): Categoria[] {
+    return this.tipoModal == 'CREDITO' ? this.categoriasCredito : this.categoriasDebito;
+
   }
 
 
@@ -368,14 +453,14 @@ export class LancamentosComponent implements OnInit {
     this.isEditando = true;
     this.lancamentoIdEditando = lancamento.id == undefined ? 0  :lancamento.id;
     this.tipoModal = lancamento.tipo; // For edits, we only support credito/debito for now
-    this.form.get('categoria')?.setValidators(Validators.required);
+    this.form.get('tipoMovimentacaoId')?.setValidators(Validators.required);
     this.form.get('bancoContaDestinoId')?.clearValidators();
-    this.form.get('categoria')?.updateValueAndValidity();
+    this.form.get('tipoMovimentacaoId')?.updateValueAndValidity();
     this.form.get('bancoContaDestinoId')?.updateValueAndValidity();
 
     this.form.patchValue({
       bancoContaId: lancamento.bancoContaId,      
-      categoria: lancamento.categoria,
+      tipoMovimentacaoId: lancamento.tipoMovimentacaoId,
       valor: lancamento.valor,
       data: lancamento.data,
       
@@ -385,13 +470,20 @@ export class LancamentosComponent implements OnInit {
   }
 
   excluirLancamento(lancamento: Lancamento): void {
-    if (confirm(`Tem certeza que deseja excluir o lançamento "${lancamento.categoria}"?`)) {
-      this.lancamentoService.removerLancamento(lancamento.id);
-    }
+    this.lancamentoParaExcluir = lancamento;
+    this.showConfirmacaoExclusao = true;
+
   }
-  
 
+  cancelarExclusao(): void {
+    this.showConfirmacaoExclusao = false;
+    this.lancamentoParaExcluir = null;
+  }
 
+  confirmarExclusao(): void {
+    if (!this.lancamentoParaExcluir) return;
 
-
+    this.lancamentoService.removerLancamento(this.lancamentoParaExcluir.id);
+    this.cancelarExclusao();
+  }
 }

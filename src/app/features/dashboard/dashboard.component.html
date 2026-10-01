@@ -188,7 +188,7 @@
             <td>{{ l.observacao }}</td>
             <td class="text-secondary">{{ getContaNome(l.bancoContaId) }}</td>
             <td class="text-secondary">{{ getBancoNome(l.bancoContaId) }}</td>
-            <td><span class="categoria-chip">{{ l.categoria }}</span></td>
+            <td><span class="categoria-chip">{{ l.tipoMovimentacaoId }}</span></td>
             <td>
               <td style="text-align:right">
               <span [class.text-success]="l.tipo === 'CREDITO'" [class.text-danger]="l.tipo === 'CREDITO'">
