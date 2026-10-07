@@ -59,11 +59,11 @@
         <div class="summary-val text-danger">{{ totalDebitos | currencyBr }}</div>
       </div>
     </div>
-    <div class="summary-card" [class.summary-card--pos]="(totalCreditos-totalDebitos)>=0" [class.summary-card--neg]="(totalCreditos-totalDebitos)<0">
+    <div class="summary-card" [class.summary-card--pos]="(totalCreditos)>=0" [class.summary-card--neg]="(totalCreditos)<0">
       <div class="summary-icon">⚖</div>
       <div>
         <div class="summary-label">Saldo (filtrado)</div>
-        <div class="summary-val" [class.text-success]="(totalCreditos-totalDebitos)>=0" [class.text-danger]="(totalCreditos-totalDebitos)<0">
+        <div class="summary-val" [class.text-success]="(totalCreditos)>=0" [class.text-danger]="(totalCreditos)<0">
           {{ (saldoInicial +totalCreditos-totalDebitos) | currencyBr }}
         </div>
       </div>

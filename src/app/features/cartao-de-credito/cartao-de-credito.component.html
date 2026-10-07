@@ -39,17 +39,17 @@
     <div class="filter-bar card-filters">
       <div class="filter-field">
         <label for="data-inicial">Data inicial</label>
-        <input id="data-inicial" class="filter-select" type="date" [(ngModel)]="dataInicial" (change)="aplicarFiltros()">
+        <input id="data-inicial" class="filter-select" type="date" [(ngModel)]="dataInicial" (change)="carregarLancamentosPorPeriodo()">
       </div>
       <div class="filter-field">
         <label for="data-final">Data final</label>
-        <input id="data-final" class="filter-select" type="date" [(ngModel)]="dataFinal" (change)="aplicarFiltros()">
+        <input id="data-final" class="filter-select" type="date" [(ngModel)]="dataFinal" (change)="carregarLancamentosPorPeriodo()">
       </div>
       <div class="filter-field filter-field-card">
         <label for="cartao">Cartão (banco)</label>
-        <select id="cartao" class="filter-select" [(ngModel)]="filtroBanco" (change)="aplicarFiltros()">
+        <select id="cartao" class="filter-select" [(ngModel)]="filtroBanco" (change)="carregarLancamentosPorPeriodo()">
           <option value="todos">Todos os cartões</option>
-          <option *ngFor="let banco of cartoes" [value]="banco.id">{{ banco.nome }}</option>
+          <option *ngFor="let cartaoCredito of cartoesCredito" [value]="cartaoCredito.id">{{ cartaoCredito.nome }}</option>
         </select>
       </div>
       <span class="closing-note">Ciclo atual: {{ fechamentoAtual | date:'dd/MM/yyyy' }} a {{ proximoFechamento | date:'dd/MM/yyyy' }}</span>
@@ -86,16 +86,16 @@
         <form class="modal-form" [formGroup]="form" (ngSubmit)="salvarLancamentoCartao()">
           <div class="form-group">
             <label class="form-label" for="modal-cartao">Cartão (banco) *</label>
-            <select id="modal-cartao" class="form-control" formControlName="contaId">
+            <select id="modal-cartao" class="form-control" formControlName="cartaoCreditoId">
               <option value="">Selecione o cartão</option>
-              <option *ngFor="let cartao of cartoes" [value]="cartao.id">{{ cartao.banco.nome }} - {{ cartao.nome }}</option>
+              <option *ngFor="let cartao of cartoesCredito" [value]="cartao.id">{{ cartao.nome }}</option>
             </select>
           </div>
 
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="data-compra">Data da compra *</label>
-              <input id="data-compra" class="form-control" type="date" formControlName="dataCompra">
+              <input id="data-compra" class="form-control" type="date" formControlName="data">
             </div>
             <div class="form-group">
               <label class="form-label" for="valor-compra">Valor total (R$) *</label>
@@ -106,8 +106,8 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="categoria-compra">Categoria *</label>
-              <select id="categoria-compra" class="form-control" formControlName="categoria">
-                <option *ngFor="let categoria of categorias" [value]="categoria">{{ categoria }}</option>
+              <select id="categoria-compra" class="form-control" formControlName="tipoMovimentacaoId">
+                <option *ngFor="let tipo of tipoMovimentacoes" [value]="tipo.id">{{ tipo.nome }}</option>
               </select>
             </div>
             <div class="form-group">
@@ -118,7 +118,7 @@
 
           <div class="form-group">
             <label class="form-label" for="observacao-compra">Observação</label>
-            <textarea id="observacao-compra" class="form-control" rows="3" formControlName="observacao" placeholder="Ex: compra para a casa"></textarea>
+            <textarea id="observacao-compra" class="form-control" rows="3" formControlName="descricao" placeholder="Ex: compra para a casa"></textarea>
           </div>
 
           <div class="modal-footer">
@@ -150,13 +150,13 @@
     <div class="card table-card">
       <div class="table-container">
         <table class="data-table">
-          <thead><tr><th>Data</th><th>Cartão / Banco</th><th>Descrição</th><th>Categoria</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead>
+          <thead><tr><th>Data</th><th>Cartão / Banco</th><th>Descrição</th><th>Tipo de Movimentação</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead>
           <tbody>
             <tr *ngFor="let movimento of movimentacoes">
               <td class="text-secondary">{{ movimento.data | date:'dd/MM/yyyy' }}</td>
-              <td><strong>{{ getBancoNome(movimento.vinculoId) }}</strong></td>
+              <td><strong>{{ movimento.cartaoCredito }}</strong></td>
               <td>{{ movimento.descricao }}</td>
-              <td><span class="category-chip">{{ movimento.categoria }}</span></td>
+              <td><span class="category-chip">{{ movimento.tipoMovimentacao }}</span></td>
               <td class="movement-value" [class.credit]="movimento.tipo === 'credito'">{{ movimento.tipo === 'credito' ? '+' : '-' }}{{ movimento.valor | currencyBr }}</td>
               <td><span class="status-pill" [class.payment]="movimento.tipo === 'credito'">{{ movimento.tipo === 'credito' ? 'Pagamento/estorno' : 'Compra' }}</span></td>
             </tr>

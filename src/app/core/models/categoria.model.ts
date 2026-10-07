@@ -1,11 +1,13 @@
 export type TipoCategoria = 'CREDITO' | 'DEBITO' | 'TRANSFERENCIA' | 'APLICACAO' | 'RESGATE' | 'TODOS';
 export type StatusCategoria = 'SIM' | 'NAO';
+export type CodigoRelatorio = 'CREDITO' | 'RENDA' | 'RENDIMENTO_NEGATIVO' | 'CARTAO' | 'APLICACAO' | 'RESGATE' | 'DEBITO' | 'MENSAL' | 'RENDIMENTO';
 
 export interface Categoria {
   id?: number;
   nome: string;
   tipo: TipoCategoria;
   ativo: StatusCategoria;
+  icRelatorio?: CodigoRelatorio | null;
 }
 
 export const TIPOS_CATEGORIA: Record<TipoCategoria, string> = {

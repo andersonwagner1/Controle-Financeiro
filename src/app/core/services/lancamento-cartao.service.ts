@@ -10,15 +10,7 @@ export class LancamentoCartaoService {
 
   constructor(private http: HttpClient) {}
 
-  getLancamentos(): Observable<LancamentoCartao[]> {
-    return this.lancamentos$.asObservable();
-  }
-
-  getLancamentosSnapshot(): LancamentoCartao[] {
-    return this.lancamentos$.getValue();
-  }
-
-  buscarPorPeriodo(dataInicio: string, dataFim: string): Observable<LancamentoCartao[]> {
+  buscarMovimentacaoPorPeriodo(cartaoCreditoId: number, dataInicio: string, dataFim: string): Observable<LancamentoCartao[]> {
     if (!dataInicio || !dataFim) {
       throw new Error('dataInicio e dataFim são obrigatórios para consultar lançamentos do cartão.');
     }
@@ -26,20 +18,25 @@ export class LancamentoCartaoService {
     const params = new HttpParams()
       .set('dataInicio', dataInicio)
       .set('dataFim', dataFim)
+      .set('contaId', cartaoCreditoId)
       .set('sort', 'data,desc');
 
-    return this.http.get<LancamentoCartao[]>(this.apiUrl, { params }).pipe(
-      tap(lancamentos => this.lancamentos$.next(lancamentos))
-    );
+    return this.http.get<LancamentoCartao[]>(this.apiUrl, { params })      
+  }
+
+  buscarPeriodoDashboard(dataInicio: string, dataFim: string): Observable<LancamentoCartao[]> {
+    const params = new HttpParams()
+      .set('dataInicio', dataInicio)
+      .set('dataFim', dataFim)
+      .set('sort', 'data,desc');
+
+    return this.http.get<LancamentoCartao[]>(this.apiUrl, { params });
   }
 
   adicionarLancamento(lancamento: Omit<LancamentoCartao, 'id'>): Observable<LancamentoCartao> {
-    const novoLancamento = {
-      ...lancamento,
-      id: 'lc' + Date.now() + Math.random().toString(36).slice(2, 7)
-    };
+    console.log('Adicionando lançamento:', lancamento);
 
-    return this.http.post<LancamentoCartao>(this.apiUrl, novoLancamento).pipe(
+    return this.http.post<LancamentoCartao>(this.apiUrl, lancamento).pipe(
       tap(salvo => this.lancamentos$.next([salvo, ...this.lancamentos$.getValue()]))
     );
   }

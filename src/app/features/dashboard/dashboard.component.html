@@ -1,4 +1,17 @@
 <div class="page-container">
+  <div class="period-filter-bar">
+    <h2>Período de competência</h2>
+    <div class="period-filters">
+      <label>
+        <span>Competência inicial</span>
+        <input type="month" [(ngModel)]="competenciaInicial" [max]="competenciaFinal || null" (change)="atualizarPeriodoSankey()">
+      </label>
+      <label>
+        <span>Competência final</span>
+        <input type="month" [(ngModel)]="competenciaFinal" [min]="competenciaInicial || null" (change)="atualizarPeriodoSankey()">
+      </label>
+    </div>
+  </div>
 
   <!-- Stats Row -->
   <div class="stats-grid">
@@ -22,15 +35,15 @@
     </div>
     <div class="stat-card card">
       <div class="stat-icon" style="background: rgba(34,197,94,0.15)">✅</div>
-      <div class="stat-label">Créditos do Mês</div>
+      <div class="stat-label">Créditos no Período</div>
       <div class="stat-value text-success">{{ dashboardCart.creditosMes | currencyBr }}</div>
-      <div class="stat-change positive">Mês atual</div>
+      <div class="stat-change positive">{{ competenciaInicial }} a {{ competenciaFinal }}</div>
     </div>
     <div class="stat-card card">
       <div class="stat-icon" style="background: rgba(244,63,94,0.15)">❌</div>
-      <div class="stat-label">Débitos do Mês</div>
+      <div class="stat-label">Débitos no Período</div>
       <div class="stat-value text-danger">{{ dashboardCart.debitosMes | currencyBr }}</div>
-      <div class="stat-change negative">Mês atual</div>
+      <div class="stat-change negative">{{ competenciaInicial }} a {{ competenciaFinal }}</div>
     </div>
     <div class="stat-card card" [class.positive-balance]="dashboardCart.saldoMes >= 0" [class.negative-balance]="dashboardCart.saldoMes < 0">
       <div class="stat-icon" style="background: rgba(6,182,212,0.15)">⚖️</div>
@@ -50,7 +63,7 @@
     <div class="card chart-card">
       <div class="card-header">
         <h3>Distribuição por Tipo</h3>
-        <span class="card-subtitle">Alocação do patrimônio</span>
+        <span class="card-subtitle">Posição em {{ competenciaFinal }}</span>
       </div>
       <div class="chart-wrapper">
         <canvas #donutChart></canvas>
@@ -61,7 +74,7 @@
     <div class="card chart-card chart-card--wide">
       <div class="card-header">
         <h3>Saldo por Banco</h3>
-        <span class="card-subtitle">Bancário vs Investimentos</span>
+        <span class="card-subtitle">Posição em {{ competenciaFinal }}</span>
       </div>
       <div class="chart-wrapper">
         <canvas #barChart></canvas>
@@ -69,21 +82,107 @@
     </div>
   </div>
 
+  <div class="card expense-chart-card">
+    <div class="card-header">
+      <div>
+        <h3>Gastos por tipo de movimentação</h3>
+        <span class="card-subtitle">{{ competenciaInicial }} a {{ competenciaFinal }} · Total: {{ totalGastos | currencyBr }}</span>
+      </div>
+    </div>
+    <div class="expense-chart-content">
+      <div class="expense-chart-message" *ngIf="carregandoGastos">Carregando gastos...</div>
+      <div class="expense-chart-message" *ngIf="!carregandoGastos && erroGastos">Não foi possível carregar os gastos deste período.</div>
+      <div class="expense-chart-message" *ngIf="!carregandoGastos && !erroGastos && gastosPorTipo.length === 0">Nenhum gasto encontrado neste período.</div>
+      <div class="expense-chart-wrapper" [hidden]="carregandoGastos || erroGastos || gastosPorTipo.length === 0">
+        <canvas #gastosChart></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card chart-card patrimonio-chart-card">
+    <div class="card-header">
+      <div>
+        <h3>Crescimento mensal do patrimônio</h3>
+        <span class="card-subtitle">Últimos 12 meses, considerando os saldos das contas</span>
+      </div>
+      <span class="card-subtitle" *ngIf="carregandoPatrimonioMensal">Carregando...</span>
+      <span class="card-subtitle" *ngIf="erroPatrimonioMensal">Não foi possível carregar o histórico.</span>
+    </div>
+    <div class="chart-wrapper">
+      <canvas #patrimonioChart></canvas>
+    </div>
+  </div>
+
+  <div class="card chart-card fluxo-mensal-chart-card">
+    <div class="card-header">
+      <div>
+        <h3>Entradas, débitos e lucro mensal</h3>
+        <span class="card-subtitle">Lucro calculado como entradas menos débitos · últimos 12 meses</span>
+      </div>
+      <span class="card-subtitle" *ngIf="carregandoFluxoMensal">Carregando...</span>
+      <span class="card-subtitle" *ngIf="erroFluxoMensal">Não foi possível carregar o histórico.</span>
+    </div>
+    <div class="chart-wrapper">
+      <canvas #fluxoMensalChart></canvas>
+    </div>
+  </div>
+
+  <section class="card report-card">
+    <div class="card-header">
+      <div>
+        <h3>Relatorio</h3>
+        <span class="card-subtitle">Movimentações mensais de {{ anoRelatorio }}</span>
+      </div>
+      <span class="card-subtitle" *ngIf="carregandoRelatorio">Carregando...</span>
+      <span class="card-subtitle" *ngIf="erroRelatorio">Não foi possível carregar o relatório.</span>
+    </div>
+    <div class="report-table-wrap" *ngIf="!carregandoRelatorio && !erroRelatorio">
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Mês</th>
+            <th>Saldo Anterior</th>
+            <th>Resgate</th>
+            <th>Renda</th>
+            <th>Credito</th>
+            <th>Rendimento</th>
+            <th>Total Credito</th>
+            <th>Rendimento Negativo</th>
+            <th>Cartao</th>
+            <th>Aplicação</th>
+            <th>Debito</th>
+            <th>mensal</th>
+            <th>Total Debito</th>
+            <th>Saldo final</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let linha of relatorioMensal">
+            <th scope="row">{{ linha.mes }}</th>
+            <td>{{ linha.saldoAnterior | currencyBr }}</td>
+            <td>{{ linha.resgate | currencyBr }}</td>
+            <td>{{ linha.renda | currencyBr }}</td>
+            <td>{{ linha.credito | currencyBr }}</td>
+            <td>{{ linha.rendimento | currencyBr }}</td>
+            <td class="report-total">{{ linha.totalCredito | currencyBr }}</td>
+            <td>{{ linha.rendimentoNegativo | currencyBr }}</td>
+            <td>{{ linha.cartao | currencyBr }}</td>
+            <td>{{ linha.aplicacao | currencyBr }}</td>
+            <td>{{ linha.debito | currencyBr }}</td>
+            <td>{{ linha.mensal | currencyBr }}</td>
+            <td class="report-total">{{ linha.totalDebito | currencyBr }}</td>
+            <td class="report-total">{{ linha.saldoFinal | currencyBr }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <div class="card sankey-card sankey-card--echarts">
     <div class="card-header">
       <div>
         <h3>Fluxo por categoria</h3>
         <span class="card-subtitle">Entradas e resgates → conta corrente e cartão → débitos e aplicações</span>
-      </div>
-      <div class="sankey-filters">
-        <label>
-          <span>Data inicial</span>
-          <input type="date" [(ngModel)]="dataInicialSankey" [max]="dataFinalSankey || null" (change)="atualizarPeriodoSankey()">
-        </label>
-        <label>
-          <span>Data final</span>
-          <input type="date" [(ngModel)]="dataFinalSankey" [min]="dataInicialSankey || null" (change)="atualizarPeriodoSankey()">
-        </label>
       </div>
     </div>
     <div #sankeyChart class="sankey-chart" aria-label="Gráfico Sankey de créditos por categoria para débitos por categoria"></div>

@@ -27,6 +27,7 @@ export class CartaoService {
   }
 
   salvarCartao(cartao: CartaoInput): Observable<Cartao> {
+    console.log('Salvando cartão:', cartao);
     return this.http.post<Cartao>(this.apiUrl, cartao).pipe(
       tap(salvo => this.cartoes$.next([...this.cartoes$.getValue(), salvo]))
     );

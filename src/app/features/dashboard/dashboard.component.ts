@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, HostListener } from '@angular/core';
-import { Subscription } from 'rxjs';
+import { forkJoin, map, of, Subscription } from 'rxjs';
 import { ContaService } from '../../core/services/conta.service';
 import { LancamentoService } from '../../core/services/lancamento.service';
 import { BancoService } from '../../core/services/banco.service';
@@ -8,7 +8,7 @@ import { Conta, TIPOS_CONTA } from '../../core/models/conta.model';
 import { Lancamento } from '../../core/models/lancamento.model';
 import { LancamentoCartao } from '../../core/models/lancamento-cartao.model';
 import { DashboardCart } from '../../core/models/dashboard-cart.model';
-import { DashboardService } from '../../core/services/dashboard.service';
+import { DashboardService, RelatorioMensal } from '../../core/services/dashboard.service';
 import { LancamentoCartaoService } from '../../core/services/lancamento-cartao.service';
 import { Chart, ChartConfiguration, registerables } from 'chart.js';
 import * as echarts from 'echarts';
@@ -38,16 +38,27 @@ interface SankeyFluxo {
 export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('donutChart') donutChartRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('barChart') barChartRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('gastosChart') gastosChartRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('patrimonioChart') patrimonioChartRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('fluxoMensalChart') fluxoMensalChartRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('sankeyChart') sankeyChartRef!: ElementRef<HTMLDivElement>;
 
   private subs = new Subscription();
   private donutChart?: Chart;
   private barChart?: Chart;
+  private gastosChart?: Chart<'pie', number[], string>;
+  private patrimonioChart?: Chart<'line', number[], string>;
+  private fluxoMensalChart?: Chart<'line', number[], string>;
   private sankeyChart?: ECharts;
   private viewReady = false;
+  private competenciaRequestId = 0;
+  private patrimonioRequestId = 0;
+  private fluxoMensalRequestId = 0;
 
   contas: Conta[] = [];
+  private contasOriginais: Conta[] = [];
   lancamentos: Lancamento[] = [];
+  private lancamentosCompetencia: Lancamento[] = [];
   lancamentosCartao: LancamentoCartao[] = [];
   bancos: Banco[] = [];
   resumosBanco: ResumoBanco[] = [];
@@ -57,6 +68,20 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   saldoInvestimentos = 0;
   totalCreditos = 0;
   totalDebitos = 0;
+  gastosPorTipo: Array<{ tipo: string; valor: number }> = [];
+  totalGastos = 0;
+  carregandoGastos = false;
+  erroGastos = false;
+  patrimonioMensal: Array<{ competencia: string; rotulo: string; saldo: number }> = [];
+  carregandoPatrimonioMensal = false;
+  erroPatrimonioMensal = false;
+  fluxoMensal: Array<{ competencia: string; rotulo: string; creditos: number; debitos: number; lucro: number }> = [];
+  carregandoFluxoMensal = false;
+  erroFluxoMensal = false;
+  anoRelatorio = new Date().getFullYear();
+  relatorioMensal: RelatorioMensal[] = [];
+  carregandoRelatorio = false;
+  erroRelatorio = false;
   private dashboardCartLoaded = false;
   dashboardCart: DashboardCart = {
     patrimonioTotal: 0,
@@ -70,8 +95,8 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   anoAtual = new Date().getFullYear();
 
   ultimosLancamentos: Lancamento[] = [];
-  dataInicialSankey = '';
-  dataFinalSankey = '';
+  competenciaInicial = this.formatarCompetencia(new Date());
+  competenciaFinal = this.competenciaInicial;
 
   get sankeyFluxos(): SankeyFluxo[] {
     const fluxos = new Map<string, SankeyFluxo>();
@@ -145,25 +170,9 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    const periodo = this.lancamentoService.periodoMesVigente();
-    this.dataInicialSankey = periodo.dataInicio;
-    this.dataFinalSankey = periodo.dataFim;
-    this.carregarLancamentosSankey();
-
-    this.subs.add(
-      this.dashboardService.getDashboardCart().subscribe({
-        next: dashboardCart => {
-          this.dashboardCartLoaded = true;
-          this.dashboardCart = dashboardCart;
-          this.saldoTotal = dashboardCart.patrimonioTotal;
-          this.saldoBancario = dashboardCart.saldoBancario;
-          this.saldoInvestimentos = dashboardCart.investimentos;
-          this.totalCreditos = dashboardCart.creditosMes;
-          this.totalDebitos = dashboardCart.debitosMes;
-        },
-        error: () => undefined
-      })
-    );
+    const periodoAtual = this.lancamentoService.periodoMesVigente();
+    this.subs.add(this.lancamentoService.buscarPagina('1900-01-01', periodoAtual.dataFim, 0, 500)
+      .subscribe({ error: () => undefined }));
 
     this.subs.add(
       this.bancoService.getBancos().subscribe(bancos => {
@@ -174,8 +183,9 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.subs.add(
       this.contaService.getContas().subscribe(contas => {
-        this.contas = contas;
-        this.calcularResumos();
+        this.contasOriginais = contas;
+        this.carregarSaldosCompetencia(this.competenciaRequestId);
+        this.carregarEvolucaoPatrimonio();
         this.updateSankeyChart();
       })
     );
@@ -186,26 +196,29 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.ultimosLancamentos = [...lancamentos]
           .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
           .slice(0, 8);
-        this.totalCreditos = this.lancamentoService.getTotalCreditoMes(this.mesAtual, this.anoAtual);
-        this.totalDebitos = this.lancamentoService.getTotalDebitoMes(this.mesAtual, this.anoAtual);
-        if (!this.dashboardCartLoaded) {
-          this.dashboardCart = {
-            ...this.dashboardCart,
-            creditosMes: this.totalCreditos,
-            debitosMes: this.totalDebitos,
-            saldoMes: this.totalCreditos - this.totalDebitos,
-          };
-        }
-        this.updateSankeyChart();
       })
     );
 
-    this.subs.add(
-      this.lancamentoCartaoService.getLancamentos().subscribe(lancamentos => {
-        this.lancamentosCartao = lancamentos;
-        this.updateSankeyChart();
-      })
-    );
+    this.atualizarPeriodoSankey();
+    this.carregarFluxoMensal();
+    this.carregarRelatorio();
+  }
+
+  private carregarRelatorio(): void {
+    this.carregandoRelatorio = true;
+    this.erroRelatorio = false;
+
+    this.subs.add(this.dashboardService.getRelatorio(this.anoRelatorio).subscribe({
+      next: relatorio => {
+        this.relatorioMensal = relatorio;
+        this.carregandoRelatorio = false;
+      },
+      error: () => {
+        this.relatorioMensal = [];
+        this.carregandoRelatorio = false;
+        this.erroRelatorio = true;
+      }
+    }));
   }
 
   ngAfterViewInit(): void {
@@ -244,7 +257,227 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   initCharts(): void {
     this.initDonutChart();
     this.initBarChart();
+    this.atualizarGraficoGastos();
+    this.atualizarGraficoPatrimonio();
+    this.atualizarGraficoFluxoMensal();
     this.updateSankeyChart();
+  }
+
+  private carregarFluxoMensal(): void {
+    const requestId = ++this.fluxoMensalRequestId;
+    const hoje = new Date();
+    const primeiroMes = new Date(hoje.getFullYear(), hoje.getMonth() - 11, 1);
+    const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    const meses = Array.from({ length: 12 }, (_, index) => {
+      const data = new Date(primeiroMes.getFullYear(), primeiroMes.getMonth() + index, 1);
+      return {
+        competencia: this.formatarCompetencia(data),
+        rotulo: data.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+        creditos: 0,
+        debitos: 0,
+        lucro: 0
+      };
+    });
+
+    this.carregandoFluxoMensal = true;
+    this.erroFluxoMensal = false;
+    this.subs.add(this.lancamentoService.buscarPeriodoCompleto(
+      this.formatarData(primeiroMes),
+      this.formatarData(ultimoDia)
+    ).subscribe({
+      next: lancamentos => {
+        if (requestId !== this.fluxoMensalRequestId) return;
+
+        const totais = new Map(meses.map(mes => [mes.competencia, mes]));
+        lancamentos.forEach(lancamento => {
+          const competencia = lancamento.data.slice(0, 7);
+          const mes = totais.get(competencia);
+          if (!mes) return;
+
+          if (lancamento.tipo === 'CREDITO') {
+            mes.creditos += Math.abs(lancamento.valor);
+          } else if (lancamento.tipo === 'DEBITO') {
+            mes.debitos += Math.abs(lancamento.valor);
+          }
+        });
+
+        this.fluxoMensal = meses.map(mes => ({ ...mes, lucro: mes.creditos - mes.debitos }));
+        this.carregandoFluxoMensal = false;
+        this.atualizarGraficoFluxoMensal();
+      },
+      error: () => {
+        if (requestId !== this.fluxoMensalRequestId) return;
+        this.fluxoMensal = [];
+        this.carregandoFluxoMensal = false;
+        this.erroFluxoMensal = true;
+        this.atualizarGraficoFluxoMensal();
+      }
+    }));
+  }
+
+  private atualizarGraficoFluxoMensal(): void {
+    if (!this.viewReady || !this.fluxoMensalChartRef) return;
+
+    const labels = this.fluxoMensal.map(item => item.rotulo);
+    const datasets = [
+      { label: 'Entradas', data: this.fluxoMensal.map(item => item.creditos), borderColor: '#3b82f6', backgroundColor: '#3b82f6' },
+      { label: 'Débitos', data: this.fluxoMensal.map(item => item.debitos), borderColor: '#ef4444', backgroundColor: '#ef4444' },
+      { label: 'Lucro (entradas - débitos)', data: this.fluxoMensal.map(item => item.lucro), borderColor: '#22c55e', backgroundColor: '#22c55e' }
+    ];
+
+    if (!this.fluxoMensalChart) {
+      this.fluxoMensalChart = new Chart(this.fluxoMensalChartRef.nativeElement, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: datasets.map(dataset => ({
+            ...dataset,
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            fill: false
+          }))
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'bottom', labels: { color: 'rgba(241,245,249,0.7)', usePointStyle: true, padding: 16 } },
+            tooltip: {
+              callbacks: {
+                label: context => ` ${context.dataset.label}: ${Number(context.parsed.y).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: 'rgba(241,245,249,0.6)' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: {
+              ticks: {
+                color: 'rgba(241,245,249,0.6)',
+                callback: value => 'R$ ' + Number(value).toLocaleString('pt-BR')
+              },
+              grid: { color: 'rgba(255,255,255,0.06)' }
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    this.fluxoMensalChart.data.labels = labels;
+    this.fluxoMensalChart.data.datasets.forEach((dataset, index) => {
+      dataset.data = datasets[index].data;
+    });
+    this.fluxoMensalChart.update();
+  }
+
+  private carregarEvolucaoPatrimonio(): void {
+    const requestId = ++this.patrimonioRequestId;
+    const hoje = new Date();
+    const competenciaAtual = this.formatarCompetencia(hoje);
+    const meses = Array.from({ length: 12 }, (_, index) => {
+      const data = new Date(hoje.getFullYear(), hoje.getMonth() - 11 + index, 1);
+      return {
+        competencia: this.formatarCompetencia(data),
+        dataCompetencia: `${this.formatarCompetencia(data)}-01`,
+        dataInicio: this.formatarData(data),
+        dataFim: this.formatarData(new Date(data.getFullYear(), data.getMonth() + 1, 0)),
+        rotulo: data.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+      };
+    });
+
+    this.carregandoPatrimonioMensal = true;
+    this.erroPatrimonioMensal = false;
+    const consultasMensais = meses.map(mes => {
+      const contasDoMes = this.contasOriginais.filter(conta =>
+        conta.dataAbertura <= mes.dataFim && (!conta.dataFechamento || conta.dataFechamento >= mes.dataInicio)
+      );
+      const consultas = contasDoMes.map(conta => conta.id == null
+        ? of({ saldoFinal: 0 })
+        : this.lancamentoService.buscarSaldoCompetencia(conta.id, mes.dataCompetencia));
+
+      return (consultas.length > 0 ? forkJoin(consultas) : of([])).pipe(
+        map(saldos => ({
+          competencia: mes.competencia,
+          rotulo: mes.rotulo,
+          saldo: contasDoMes.reduce((total, conta, index) => total + (
+            saldos[index]?.saldoFinal ?? (mes.competencia === competenciaAtual ? conta.saldo : 0)
+          ), 0)
+        }))
+      );
+    });
+
+    this.subs.add(forkJoin(consultasMensais).subscribe({
+      next: patrimonio => {
+        if (requestId !== this.patrimonioRequestId) return;
+        this.patrimonioMensal = patrimonio;
+        this.carregandoPatrimonioMensal = false;
+        this.atualizarGraficoPatrimonio();
+      },
+      error: () => {
+        if (requestId !== this.patrimonioRequestId) return;
+        this.patrimonioMensal = [];
+        this.carregandoPatrimonioMensal = false;
+        this.erroPatrimonioMensal = true;
+      }
+    }));
+  }
+
+  private atualizarGraficoPatrimonio(): void {
+    if (!this.viewReady || !this.patrimonioChartRef) return;
+
+    const labels = this.patrimonioMensal.map(item => item.rotulo);
+    const valores = this.patrimonioMensal.map(item => item.saldo);
+    if (!this.patrimonioChart) {
+      this.patrimonioChart = new Chart(this.patrimonioChartRef.nativeElement, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Patrimônio',
+            data: valores,
+            borderColor: '#4ade80',
+            backgroundColor: 'rgba(74, 222, 128, 0.12)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            pointBackgroundColor: '#4ade80'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: context => ` ${Number(context.parsed.y).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: 'rgba(241,245,249,0.6)' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: {
+              beginAtZero: false,
+              ticks: {
+                color: 'rgba(241,245,249,0.6)',
+                callback: value => 'R$ ' + Number(value).toLocaleString('pt-BR')
+              },
+              grid: { color: 'rgba(255,255,255,0.06)' }
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    this.patrimonioChart.data.labels = labels;
+    this.patrimonioChart.data.datasets[0].data = valores;
+    this.patrimonioChart.update();
   }
 
   private updateSankeyChart(): void {
@@ -299,7 +532,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       else fluxos.set(chave, { source, target, value });
     };
     const contaPorId = new Map(this.contas.map(conta => [conta.id, conta]));
-    const transferencias = this.lancamentos.filter(l => l.transferenciaId && this.estaNoPeriodoSankey(l.data));
+    const transferencias = this.lancamentosCompetencia.filter(l => l.transferenciaId && this.estaNoPeriodoSankey(l.data));
 
     // Transferências entre contas: identifica resgates e novas aplicações automaticamente.
     transferencias.filter(l => l.tipo === 'DEBITO').forEach(debito => {
@@ -316,7 +549,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     // Entradas e débitos feitos diretamente na conta corrente.
-    this.lancamentos
+    this.lancamentosCompetencia
       .filter(l => !l.transferenciaId && l.valor > 0 && this.estaNoPeriodoSankey(l.data))
       .forEach(lancamento => {
         const conta = contaPorId.get(lancamento.bancoContaId);
@@ -333,7 +566,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     const comprasCartao = this.lancamentosCartao
       .filter(l => l.tipo === 'debito' && l.valor > 0 && this.estaNoPeriodoSankey(l.data));
     const totalComprasCartao = comprasCartao.reduce((total, compra) => total + compra.valor, 0);
-    const pagamentosFatura = this.lancamentos
+    const pagamentosFatura = this.lancamentosCompetencia
       .filter(l => {
         const conta = contaPorId.get(l.bancoContaId);
         return l.tipo === 'DEBITO' && !l.transferenciaId && this.ehContaCorrente(conta)
@@ -343,7 +576,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     const fluxoFatura = totalComprasCartao || pagamentosFatura;
     if (fluxoFatura > 0) adicionar('Conta Corrente', 'Cartão de Crédito', fluxoFatura);
     comprasCartao.forEach(compra => {
-      const categoria = compra.categoria?.trim() || 'Sem categoria';
+      const categoria = compra.tipoMovimentacao?.trim() || 'Sem categoria';
       adicionar('Cartão de Crédito', `Débito cartão · ${categoria}`, compra.valor);
     });
 
@@ -369,22 +602,169 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   }*/
 
   atualizarPeriodoSankey(): void {
-    if (this.dataInicialSankey && this.dataFinalSankey) {
-      this.carregarLancamentosSankey();
-    }
+    if (!this.competenciaInicial || !this.competenciaFinal || this.competenciaInicial > this.competenciaFinal) return;
+    const requestId = ++this.competenciaRequestId;
+    this.carregarLancamentosSankey(requestId);
+    this.carregarGastosPorTipo(requestId);
+    this.carregarSaldosCompetencia(requestId);
   }
 
-  private carregarLancamentosSankey(): void {
-    this.subs.add(this.lancamentoService.buscarPagina(this.dataInicialSankey, this.dataFinalSankey, 0, 500)
-      .subscribe({ error: () => undefined }));
-    this.subs.add(this.lancamentoCartaoService.buscarPorPeriodo(this.dataInicialSankey, this.dataFinalSankey)
-      .subscribe({ error: () => undefined }));
+  private carregarGastosPorTipo(requestId: number): void {
+    const periodo = this.obterPeriodoCompetencia();
+    this.carregandoGastos = true;
+    this.erroGastos = false;
+
+    this.subs.add(this.lancamentoService.buscarPeriodoCompleto(periodo.dataInicio, periodo.dataFim)
+      .subscribe({
+        next: lancamentos => {
+          if (requestId !== this.competenciaRequestId) return;
+
+          const totais = new Map<string, number>();
+          lancamentos
+            .filter(lancamento => lancamento.tipo === 'DEBITO')
+            .forEach(lancamento => {
+              const tipo = lancamento.tipoMovimentacao || 'Sem tipo';
+              totais.set(tipo, (totais.get(tipo) ?? 0) + Math.abs(lancamento.valor));
+            });
+
+          this.gastosPorTipo = [...totais.entries()]
+            .map(([tipo, valor]) => ({ tipo, valor }))
+            .sort((a, b) => b.valor - a.valor);
+          this.totalGastos = this.gastosPorTipo.reduce((total, item) => total + item.valor, 0);
+          this.carregandoGastos = false;
+          this.erroGastos = false;
+          this.atualizarGraficoGastos();
+        },
+        error: () => {
+          if (requestId !== this.competenciaRequestId) return;
+          this.gastosPorTipo = [];
+          this.totalGastos = 0;
+          this.carregandoGastos = false;
+          this.erroGastos = true;
+          this.atualizarGraficoGastos();
+        }
+      }));
+  }
+
+  private atualizarGraficoGastos(): void {
+    if (!this.viewReady || !this.gastosChartRef) return;
+
+    const cores = ['#fb7185', '#f59e0b', '#38bdf8', '#4ade80', '#a78bfa', '#f472b6', '#2dd4bf', '#facc15'];
+    const labels = this.gastosPorTipo.map(item => item.tipo);
+    const valores = this.gastosPorTipo.map(item => item.valor);
+
+    if (!this.gastosChart) {
+      this.gastosChart = new Chart(this.gastosChartRef.nativeElement, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{ data: valores, backgroundColor: labels.map((_, index) => cores[index % cores.length]), borderColor: '#151d2b', borderWidth: 2 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { color: 'rgba(241,245,249,0.7)', padding: 16, usePointStyle: true } },
+            tooltip: {
+              callbacks: {
+                label: context => ` ${context.label}: ${Number(context.parsed).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+              }
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    this.gastosChart.data.labels = labels;
+    this.gastosChart.data.datasets[0].data = valores;
+    this.gastosChart.data.datasets[0].backgroundColor = labels.map((_, index) => cores[index % cores.length]);
+    this.gastosChart.update();
+  }
+
+  private carregarLancamentosSankey(requestId: number): void {
+    const periodo = this.obterPeriodoCompetencia();
+    this.subs.add(this.lancamentoService.buscarPeriodoDashboard(periodo.dataInicio, periodo.dataFim)
+      .subscribe({
+        next: lancamentos => {
+          if (requestId !== this.competenciaRequestId) return;
+          this.lancamentosCompetencia = lancamentos;
+          this.updateSankeyChart();
+        },
+        error: () => undefined
+      }));
+    this.subs.add(this.lancamentoCartaoService.buscarPeriodoDashboard(periodo.dataInicio, periodo.dataFim)
+      .subscribe({
+        next: lancamentos => {
+          if (requestId !== this.competenciaRequestId) return;
+          this.lancamentosCartao = lancamentos;
+          this.updateSankeyChart();
+        },
+        error: () => undefined
+      }));
+    this.subs.add(this.dashboardService.getDashboardCart(this.competenciaInicial, this.competenciaFinal)
+      .subscribe({
+        next: dashboardCart => {
+          if (requestId !== this.competenciaRequestId) return;
+          this.dashboardCartLoaded = true;
+          this.dashboardCart = dashboardCart;
+          this.saldoTotal = dashboardCart.patrimonioTotal;
+          this.saldoBancario = dashboardCart.saldoBancario;
+          this.saldoInvestimentos = dashboardCart.investimentos;
+          this.totalCreditos = dashboardCart.creditosMes;
+          this.totalDebitos = dashboardCart.debitosMes;
+        },
+        error: () => undefined
+      }));
   }
 
   private estaNoPeriodoSankey(data: string): boolean {
     const dataLancamento = data.slice(0, 10);
-    return (!this.dataInicialSankey || dataLancamento >= this.dataInicialSankey)
-      && (!this.dataFinalSankey || dataLancamento <= this.dataFinalSankey);
+    const periodo = this.obterPeriodoCompetencia();
+    return dataLancamento >= periodo.dataInicio && dataLancamento <= periodo.dataFim;
+  }
+
+  private carregarSaldosCompetencia(requestId: number): void {
+    if (this.contasOriginais.length === 0) {
+      this.contas = [];
+      this.calcularResumos();
+      return;
+    }
+
+    const dataCompetencia = `${this.competenciaFinal}-01`;
+    const consultas = this.contasOriginais.map(conta => conta.id == null
+      ? of({ saldoFinal: 0 })
+      : this.lancamentoService.buscarSaldoCompetencia(conta.id, dataCompetencia));
+
+    this.subs.add(forkJoin(consultas).subscribe({
+      next: saldos => {
+        if (requestId !== this.competenciaRequestId) return;
+        this.contas = this.contasOriginais.map((conta, index) => ({
+          ...conta,
+          saldo: saldos[index].saldoFinal
+            ?? (this.competenciaFinal === this.formatarCompetencia(new Date()) ? conta.saldo : 0)
+        }));
+        this.calcularResumos();
+        this.updateSankeyChart();
+      },
+      error: () => undefined
+    }));
+  }
+
+  private obterPeriodoCompetencia(): { dataInicio: string; dataFim: string } {
+    const [anoFinal, mesFinal] = this.competenciaFinal.split('-').map(Number);
+    return {
+      dataInicio: `${this.competenciaInicial}-01`,
+      dataFim: this.formatarData(new Date(anoFinal, mesFinal, 0)),
+    };
+  }
+
+  private formatarCompetencia(data: Date): string {
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  private formatarData(data: Date): string {
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
   }
 
   private criarFluxosCategorias(
@@ -575,8 +955,13 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subs.unsubscribe();
+    this.patrimonioRequestId++;
+    this.fluxoMensalRequestId++;
     this.donutChart?.destroy();
     this.barChart?.destroy();
+    this.gastosChart?.destroy();
+    this.patrimonioChart?.destroy();
+    this.fluxoMensalChart?.destroy();
     this.sankeyChart?.dispose();
   }
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { BehaviorSubject, Observable, throwError, tap } from 'rxjs';
+import { BehaviorSubject, EMPTY, Observable, expand, reduce, throwError, tap } from 'rxjs';
 import { Lancamento } from '../models/lancamento.model';
 import { ContaService } from './conta.service';
 import { VinculoService } from './vinculo.service';
@@ -84,6 +84,47 @@ export class LancamentoService {
 
       })
     );
+  }
+
+  buscarPeriodoDashboard(dataInicio: string, dataFim: string): Observable<Lancamento[]> {
+    const params = new HttpParams()
+      .set('dataInicial', dataInicio)
+      .set('dataFinal', dataFim)
+      .set('page', 0)
+      .set('size', 500);
+
+    return this.http.get<Lancamento[]>(`${this.apiUrl}/lista`, { params });
+  }
+
+  buscarPeriodoCompleto(dataInicio: string, dataFim: string, contaId?: number): Observable<Lancamento[]> {
+    const tamanhoPagina = 500;
+    const buscarPagina = (pagina: number): Observable<Lancamento[]> => {
+      let params = new HttpParams()
+        .set('dataInicial', dataInicio)
+        .set('dataFinal', dataFim)
+        .set('page', pagina)
+        .set('size', tamanhoPagina)
+        .set('sort', 'data,desc');
+
+      if (contaId) {
+        params = params.set('contaId', contaId);
+      }
+
+      return this.http.get<Lancamento[]>(`${this.apiUrl}/lista`, { params });
+    };
+
+    return buscarPagina(0).pipe(
+      expand((lancamentos, pagina) => lancamentos.length < tamanhoPagina ? EMPTY : buscarPagina(pagina + 1)),
+      reduce((todos, lancamentos) => todos.concat(lancamentos), [] as Lancamento[])
+    );
+  }
+
+  buscarSaldoCompetencia(contaId: number, dataCompetencia: string): Observable<{ saldoFinal: number | null }> {
+    const params = new HttpParams()
+      .set('contaId', contaId)
+      .set('dataInicial', dataCompetencia);
+
+    return this.http.get<{ saldoFinal: number | null }>(`${this.apiUrl}/saldo`, { params });
   }
 
   periodoMesVigente(dataReferencia = new Date()): { dataInicio: string; dataFim: string } {

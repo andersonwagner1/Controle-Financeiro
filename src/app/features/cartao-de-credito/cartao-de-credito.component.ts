@@ -11,6 +11,7 @@ import { ContaService } from '../../core/services/conta.service';
 import { CartaoService } from '../../core/services/cartao.service';
 import { LancamentoCartaoService } from '../../core/services/lancamento-cartao.service';
 import { CategoriaService } from '../../core/services/categoria.service';
+import { Categoria } from '../../core/models/categoria.model';
 
 interface CartaoResumo extends Cartao {
   banco: Banco;
@@ -24,10 +25,16 @@ interface CartaoResumo extends Cartao {
 })
 export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   private subs = new Subscription();
-  private todosLancamentos: LancamentoCartao[] = [];
   private todasContas: Conta[] = [];
+
+
   private cartoesApi: Cartao[] = [];
+
+  tipoMovimentacoes: Categoria[] = [];
   bancos: Banco[] = [];
+
+
+  cartoesCredito: Cartao[] = [];
 
   cartoes: CartaoResumo[] = [];
   movimentacoes: LancamentoCartao[] = [];
@@ -55,13 +62,14 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
     this.fechamentoAtual = this.formatarData(inicioCiclo);
     this.proximoFechamento = this.formatarData(new Date(inicioCiclo.getFullYear(), inicioCiclo.getMonth() + 1, 8));
     this.form = this.formBuilder.group({
-      contaId: ['', Validators.required],
-      dataCompra: [this.formatarData(hoje), Validators.required],
+      cartaoCreditoId: ['', Validators.required],
+      data: [this.formatarData(hoje), Validators.required],
       valor: [null, [Validators.required, Validators.min(0.01)]],
-      observacao: [''],
-      categoria: ['Alimentação', Validators.required],
+      descricao: [''],
+      tipoMovimentacaoId: ['Alimentação', Validators.required],
       parcelas: [1, [Validators.required, Validators.min(1), Validators.max(60)]]
     });
+   
     this.cadastroCartaoForm = this.formBuilder.group({
       bancoId: ['', Validators.required],
       descricao: ['', [Validators.required, Validators.minLength(3)]],
@@ -72,29 +80,30 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
       dataFechamento: ['']
     });
 
-    this.subs.add(this.bancoService.getBancos().subscribe(bancos => {
+    this.categoriaService.getCategorias().subscribe(categorias => {      
+      this.tipoMovimentacoes = categorias
+    });
+
+     this.bancoService.getBancos().subscribe(bancos => {
       this.bancos = bancos;
       this.atualizarCartoes();
-    }));
-    this.subs.add(this.contaService.getContas().subscribe(contas => {
+    });
+
+     this.contaService.getContas().subscribe(contas => {
       this.todasContas = contas;
-      this.aplicarFiltros();
-    }));
-    this.subs.add(this.cartaoService.listarCartoes().subscribe({
+      this.carregarLancamentosPorPeriodo();
+    });
+
+     this.cartaoService.listarCartoes().subscribe({
       next: cartoes => {
-        
-        this.cartoesApi = cartoes;
-        
+        this.cartoesCredito = cartoes;
         this.atualizarCartoes();
       },
       error: () => { this.erroCadastroCartao = 'Não foi possível carregar os cartões.'; }
-    }));
-    this.subs.add(this.lancamentoCartaoService.getLancamentos().subscribe(lancamentos => {
-      this.todosLancamentos = lancamentos;
-      this.aplicarFiltros();
-      this.atualizarCartoes();
-    }));
+    });
+
     this.carregarLancamentosPorPeriodo();
+
   }
 
   constructor(
@@ -210,6 +219,8 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   }
 
   salvarCartao(): void {
+    console.log('Salvando cartão:', this.cadastroCartaoForm.value);
+
     if (this.cadastroCartaoForm.invalid) return;
 
     const valor = this.cadastroCartaoForm.value;
@@ -260,72 +271,37 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   salvarLancamentoCartao(): void {
     if (this.form.invalid) return;
 
-    const valorTotal = Number(this.form.value.valor);
-    const quantidadeParcelas = Number(this.form.value.parcelas);
-    const valorParcela = Math.floor((valorTotal / quantidadeParcelas) * 100) / 100;
-    const diferenca = Math.round((valorTotal - valorParcela * quantidadeParcelas) * 100) / 100;
-    const dataCompra = this.form.value.dataCompra as string;
-    const observacao = this.form.value.observacao?.trim();
-    const parcelas: Omit<LancamentoCartao, 'id'>[] = [];
-
-    for (let indice = 0; indice < quantidadeParcelas; indice++) {
-      const numeroParcela = indice + 1;
-      const valor = numeroParcela === quantidadeParcelas
-        ? Math.round((valorParcela + diferenca) * 100) / 100
-        : valorParcela;
-      const complemento = quantidadeParcelas > 1 ? `Parcela ${numeroParcela}/${quantidadeParcelas}` : 'Compra à vista';
-      const observacaoParcela = [
-        `Compra em ${this.formatarDataVisual(dataCompra)}`,
-        complemento,
-        observacao
-      ].filter(Boolean).join(' | ');
-
-      parcelas.push({
-        vinculoId: this.form.value.contaId,
-        tipo: 'debito' as const,
-        descricao: `Compra no cartão - ${complemento}`,
-        categoria: this.form.value.categoria,
-        valor,
-        data: this.adicionarMeses(dataCompra, indice),
-        observacao: observacaoParcela
-      });
-    }
-
-    forkJoin(parcelas.map(parcela => this.lancamentoCartaoService.adicionarLancamento(parcela))).subscribe({
-      next: () => this.fecharModal()
+    this.lancamentoCartaoService.adicionarLancamento(this.form.value).subscribe({
+      next: () => this.fecharModal(),
+      error: () => { this.erroCadastroCartao = 'Não foi possível salvar o lançamento.'; }
     });
   }
 
-  getBancoNome(cartaoId?: number): string {
-    const cartao = this.cartoesApi.find(item => item.id === Number(cartaoId));
-    return this.bancos.find(b => b.id === Number(cartao?.vinculoId))?.nome || 'Banco não informado';
-  }
 
-  aplicarFiltros(): void {
-    //const contasCartao = this.cartoesApi.filter(cartao => cartao.ativa && this.cartaoEstaAtivo(cartao));
 
-    this.movimentacoes = this.todosLancamentos
-      //.filter(lancamento => contasCartao.some(cartao => {
-      //    return this.filtroBanco === lancamento.contaId;
-      //  }));
-      //.filter(lancamento => this.filtroBanco === 'todos' || contasCartao.find(cartao => cartao.id === lancamento.contaId)?.vinculoId === this.filtroBanco)
-      .filter(lancamento => this.filtroBanco === 'todos' || lancamento.vinculoId == Number(this.filtroBanco))
-      .filter(lancamento => !this.dataInicial || lancamento.data >= this.dataInicial)
-      .filter(lancamento => !this.dataFinal || lancamento.data <= this.dataFinal)
-      .sort((a, b) => b.data.localeCompare(a.data));
-  }
 
-  alterarPeriodo(): void {
-    this.carregarLancamentosPorPeriodo();
-  }
+  carregarLancamentosPorPeriodo(): void {
+      let cartaoCreditoId: number | undefined;
+      if(this.filtroBanco === 'todos'){
+        cartaoCreditoId = 0;
+      } else {
+        cartaoCreditoId = Number(this.filtroBanco);
+      }
 
-  private carregarLancamentosPorPeriodo(): void {
-    this.subs.add(this.lancamentoCartaoService.buscarPorPeriodo(this.dataInicial, this.dataFinal)
-      .subscribe({ error: () => undefined }));
+     
+
+    this.lancamentoCartaoService.buscarMovimentacaoPorPeriodo(Number(cartaoCreditoId), this.dataInicial, this.dataFinal).subscribe({
+      next: lancamentos => {
+        console.log("lancamentos carregados: ", lancamentos);
+        this.movimentacoes = lancamentos;
+      },
+      error: () => { this.erroCadastroCartao = 'Não foi possível carregar os lançamentos do período.'; } 
+    });     
   }
 
   private atualizarCartoes(): void {
     const contasCartao = this.cartoesApi.filter(cartao => this.cartaoEstaAtivo(cartao));
+
     
     /*this.cartoes = contasCartao.map((cartao, index) => {
       const banco = this.bancos.find(item => item.id === Number(cartao.vinculoId)) || {
@@ -355,8 +331,8 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   }
 
   private movimentacoesDoFiltroBanco(): LancamentoCartao[] {
-    return this.todosLancamentos.filter(lancamento => {      
-      return lancamento.vinculoId === Number(this.filtroBanco) || this.filtroBanco === 'todos';
+    return this.movimentacoes.filter(lancamento => {      
+      return lancamento.cartaoCreditoId === Number(this.filtroBanco) || this.filtroBanco === 'todos';
     });
 
   }
@@ -365,18 +341,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
     return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
   }
 
-  private adicionarMeses(data: string, meses: number): string {
-    const original = new Date(`${data}T12:00:00`);
-    const resultado = new Date(original.getFullYear(), original.getMonth() + meses, 1);
-    const ultimoDia = new Date(resultado.getFullYear(), resultado.getMonth() + 1, 0).getDate();
-    resultado.setDate(Math.min(original.getDate(), ultimoDia));
-    return this.formatarData(resultado);
-  }
 
-  private formatarDataVisual(data: string): string {
-    const [ano, mes, dia] = data.split('-');
-    return `${dia}/${mes}/${ano}`;
-  }
 
   ngOnDestroy(): void {
     this.subs.unsubscribe();

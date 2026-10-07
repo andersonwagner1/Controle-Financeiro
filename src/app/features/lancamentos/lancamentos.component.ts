@@ -31,14 +31,20 @@ export class LancamentosComponent implements OnInit {
   filtroTipo = 'todos';
   filtroConta = 'todas';
   filtroCompetencia = new Date().toISOString().substring(0, 7); // YYYY-MM
-  categoriasDisponiveis: string[] = [];
+  //categoriasDisponiveis: string[] = [];
   paginaAtual = 0;
   totalPaginas = 0;
   totalLancamentos = 0;
 
-  saldoInicial = 0;
+
+  valorInicial = 1000;
+
+
+  saldoInicial = 1000;
   totalCreditos = 0;
   totalDebitos = 0;
+
+  saldoFinal = 0;
   readonly tamanhoPagina = 50;
 
   showModal = false;
@@ -105,9 +111,6 @@ export class LancamentosComponent implements OnInit {
      this.carregarPagina();
     
   }
-
-  
-
 
    constructor(
     private lancamentoService: LancamentoService,
@@ -242,10 +245,12 @@ export class LancamentosComponent implements OnInit {
     //Adicionar metodo para buscar os lancamentos
 
     this.lancamentoService.buscarLancamentosFinal(dataInicio, bancoContaId).subscribe({
-      next: (resultado : any) =>{
-        this.saldoInicial =  resultado.vlSaldoInicial;
-        this.totalCreditos=  resultado.vlTotalCredito;
-        this.totalDebitos = resultado.vlTotalDebito;
+      next: (resultado : any) =>{        
+        console.log("Resultado da busca de lançamentos:", resultado);
+        this.valorInicial =  resultado.saldoInicial;
+        this.totalCreditos=  resultado.totalCredito;
+        this.totalDebitos = resultado.totalDebito;
+        this.saldoFinal = resultado.saldoFinal;
       },
       error: () => {
 
@@ -255,7 +260,7 @@ export class LancamentosComponent implements OnInit {
     this.lancamentoService.buscarPagina(dataInicio, dataFim, this.paginaAtual, this.tamanhoPagina, bancoContaId)
       .subscribe({
         next: (resultado: Lancamento[]) => {
-          console.log("Resultado da busca de lançamentos:", resultado);
+         
           this.lancamentosFiltrados = resultado;
           this.totalLancamentos = resultado.length;
         },
