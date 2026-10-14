@@ -7,6 +7,8 @@ export interface LancamentoCartao {
 
   tipoMovimentacao: string;
 
+  tipoMovimentacaoId?: number;
+
   cartaoCredito : string
 
   
@@ -17,6 +19,8 @@ export interface LancamentoCartao {
   tipo: TipoLancamentoCartao;
 
   cartaoCreditoId: number;
+
+  parcelas?: number;
   
   /*
   categoria: string;

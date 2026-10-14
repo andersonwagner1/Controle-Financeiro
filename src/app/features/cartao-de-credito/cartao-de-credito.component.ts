@@ -46,6 +46,11 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   proximoFechamento = '';
   categorias: string[] = [];
   showModal = false;
+  isEditandoLancamento = false;
+  lancamentoIdEditando: number | null = null;
+  showConfirmacaoExclusao = false;
+  lancamentoParaExcluir: LancamentoCartao | null = null;
+  erroLancamento = '';
   showCadastroCartao = false;
   isEditandoCartao = false;
   cartaoIdEditando: number | null = null;
@@ -53,7 +58,16 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
   cadastroCartaoForm!: FormGroup;
   form!: FormGroup;
 
+  faturaAtual: number = 0;
+  limiteDisponivel: number = 0;
+  limiteTotal: number = 0;
+  pagamentoAnterior: number = 0;
+  pagamentoFuturo: number = 0;
+  pagamentoProximo: number = 0;
+
   ngOnInit(): void {
+
+    
     const hoje = new Date();
     const inicioCiclo = this.inicioCicloAtual(hoje);
     this.dataInicial = this.formatarData(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
@@ -61,6 +75,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
     this.fechamentoAnterior = this.formatarData(new Date(inicioCiclo.getFullYear(), inicioCiclo.getMonth() - 1, 9));
     this.fechamentoAtual = this.formatarData(inicioCiclo);
     this.proximoFechamento = this.formatarData(new Date(inicioCiclo.getFullYear(), inicioCiclo.getMonth() + 1, 8));
+    
     this.form = this.formBuilder.group({
       cartaoCreditoId: ['', Validators.required],
       data: [this.formatarData(hoje), Validators.required],
@@ -86,7 +101,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
 
      this.bancoService.getBancos().subscribe(bancos => {
       this.bancos = bancos;
-      this.atualizarCartoes();
+   //   this.atualizarCartoes();
     });
 
      this.contaService.getContas().subscribe(contas => {
@@ -97,12 +112,13 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
      this.cartaoService.listarCartoes().subscribe({
       next: cartoes => {
         this.cartoesCredito = cartoes;
-        this.atualizarCartoes();
+       // this.atualizarCartoes();
       },
       error: () => { this.erroCadastroCartao = 'Não foi possível carregar os cartões.'; }
     });
 
-    this.carregarLancamentosPorPeriodo();
+    this.atualizarInformacoesDaTela();
+   // this.carregarLancamentosPorPeriodo();
 
   }
 
@@ -122,49 +138,23 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
       : this.cartoes.filter(cartao => cartao.id === Number(this.filtroBanco));
   }
 
-  get bancosDosCartoes(): Banco[] {
-    const ids = new Set(this.cartoes.map(cartao => cartao.vinculoId));
-    
-    return this.bancos.filter(banco => ids.has(banco.id));
+
+  mostrarDetalhesNoCards(): void {
+    this.lancamentoCartaoService.detalhesCartaoPorPeriodo(this.filtroBanco, this.dataInicial, this.dataFinal).subscribe({
+      next: dados => {
+        this.faturaAtual=dados.faturaAtual;
+        this.limiteDisponivel=dados.limiteDisponivel;
+        this.limiteTotal=dados.limiteTotal;
+        this.pagamentoAnterior=dados.pagamentoAnterior;
+        this.pagamentoFuturo=dados.pagamentoFuturo;
+        this.pagamentoProximo = dados.pagamentoProximo;
+      },
+      error: () => { this.erroCadastroCartao = 'Não foi possível carregar os dados do cartão.'; }
+    });
   }
 
-  get pagamentosAnteriores(): LancamentoCartao[] {
-    return this.movimentacoesPorPeriodo(this.fechamentoAnterior, this.fechamentoAtual);
-  }
 
-  get faturaAtual(): LancamentoCartao[] {
-    return this.movimentacoesPorPeriodo(this.fechamentoAtual, this.proximoFechamento);
-  }
 
-  get pagamentosFuturos(): LancamentoCartao[] {
-    return this.movimentacoesDoFiltroBanco().filter(l => l.data >= this.proximoFechamento);
-  }
-
-  get valorFaturaAtual(): number {
-    return this.faturaAtual.filter(l => l.tipo === 'debito').reduce((total, l) => total + l.valor, 0);
-  }
-
-  get valorPagamentoAnterior(): number {
-    return this.pagamentosAnteriores.filter(l => l.tipo === 'debito').reduce((total, l) => total + l.valor, 0);
-  }
-
-  get valorPagamentosFuturos(): number {
-    return this.pagamentosFuturos.filter(l => l.tipo === 'debito').reduce((total, l) => total + l.valor, 0);
-  }
-
-  get limiteTotal(): number {
-    
-    return this.cartoesFiltrados.reduce((total, cartao) => total + cartao.limite, 0);
-  }
-
-  get utilizadoTotal(): number {
-    return this.cartoesFiltrados.reduce((total, cartao) => total + cartao.utilizado, 0);
-  }
-
-  get disponivelTotal(): number {
-    
-    return this.limiteTotal - this.utilizadoTotal;
-  }
 
   getPercentualUtilizado(cartao: CartaoResumo): number {
     return Math.min(100, Math.round((cartao.utilizado / cartao.limite) * 100));
@@ -172,12 +162,31 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
 
   abrirModalLancamento(): void {
     this.form.reset({
-      contaId: this.cartoesFiltrados[0]?.id || '',
-      dataCompra: this.formatarData(new Date()),
+      cartaoCreditoId: this.cartoesFiltrados[0]?.id || '',
+      data: this.formatarData(new Date()),
       valor: null,
-      observacao: '',
-      categoria: 'Alimentação',
+      descricao: '',
+      tipoMovimentacaoId: this.tipoMovimentacoes[0]?.id || '',
       parcelas: 1
+    });
+    this.isEditandoLancamento = false;
+    this.lancamentoIdEditando = null;
+    this.erroLancamento = '';
+    this.showModal = true;
+  }
+
+  editarLancamento(movimento: LancamentoCartao): void {
+    const categoria = this.tipoMovimentacoes.find(item => item.nome === movimento.tipoMovimentacao);
+    this.isEditandoLancamento = true;
+    this.lancamentoIdEditando = movimento.id;
+    this.erroLancamento = '';
+    this.form.patchValue({
+      cartaoCreditoId: movimento.cartaoCreditoId,
+      data: movimento.data,
+      valor: movimento.valor,
+      descricao: movimento.descricao,
+      tipoMovimentacaoId: movimento.tipoMovimentacaoId ?? categoria?.id ?? '',
+      parcelas: movimento.parcelas ?? 1
     });
     this.showModal = true;
   }
@@ -246,7 +255,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
       this.cartaoService.atualizarCartao(cartao.id, cartao).subscribe({
         next: () => {
           this.cartoesApi = this.cartaoService.getCartoesSnapshot();
-          this.atualizarCartoes();
+         // this.atualizarCartoes();
           this.fecharCadastroCartao();
         },
         error: () => { this.erroCadastroCartao = 'Não foi possível atualizar o cartão.'; }
@@ -256,7 +265,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
       this.cartaoService.salvarCartao(cartao).subscribe({
         next: () => {
           this.cartoesApi = this.cartaoService.getCartoesSnapshot();
-          this.atualizarCartoes();
+        //  this.atualizarCartoes();
           this.fecharCadastroCartao();
         },
         error: () => { this.erroCadastroCartao = 'Não foi possível salvar o cartão.'; }
@@ -266,17 +275,66 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
 
   fecharModal(): void {
     this.showModal = false;
+    this.erroLancamento = '';
   }
 
   salvarLancamentoCartao(): void {
     if (this.form.invalid) return;
 
-    this.lancamentoCartaoService.adicionarLancamento(this.form.value).subscribe({
-      next: () => this.fecharModal(),
-      error: () => { this.erroCadastroCartao = 'Não foi possível salvar o lançamento.'; }
+    let lancamentoCartao = this.form.value;
+
+    if(!this.isEditandoLancamento){
+      this.lancamentoCartaoService.adicionarLancamento(lancamentoCartao).subscribe({
+        next: () => {
+          this.atualizarInformacoesDaTela();
+          },
+          error: () => { this.erroCadastroCartao = 'Não foi possível salvar o cartão.'; }
+        });
+    }else{
+      this.lancamentoCartaoService.atualizarLancamento(lancamentoCartao).subscribe({
+        next: () => {
+          this.atualizarInformacoesDaTela();
+          },
+          error: () => { this.erroCadastroCartao = 'Não foi possível salvar o cartão.'; }
+        });
+    }
+
+   
+    
+  }
+
+  excluirLancamento(movimento: LancamentoCartao): void {
+    this.lancamentoParaExcluir = movimento;
+    this.showConfirmacaoExclusao = true;
+  }
+
+  cancelarExclusao(): void {
+    this.showConfirmacaoExclusao = false;
+    this.lancamentoParaExcluir = null;
+  }
+
+  confirmarExclusao(): void {
+    if (!this.lancamentoParaExcluir) return;
+
+    this.lancamentoCartaoService.removerLancamento(this.lancamentoParaExcluir.id).subscribe({
+      next: () => {
+        this.cancelarExclusao();
+        this.atualizarInformacoesDaTela();
+      },
+      error: () => {
+        this.erroLancamento = 'Não foi possível excluir o lançamento.';
+        this.cancelarExclusao();
+      }
     });
   }
 
+
+
+  atualizarInformacoesDaTela(){
+    this.mostrarDetalhesNoCards();
+    this.carregarLancamentosPorPeriodo();
+  }
+  
 
 
 
@@ -291,16 +349,18 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
      
 
     this.lancamentoCartaoService.buscarMovimentacaoPorPeriodo(Number(cartaoCreditoId), this.dataInicial, this.dataFinal).subscribe({
-      next: lancamentos => {
-        console.log("lancamentos carregados: ", lancamentos);
+      next: lancamentos => {       
         this.movimentacoes = lancamentos;
       },
       error: () => { this.erroCadastroCartao = 'Não foi possível carregar os lançamentos do período.'; } 
-    });     
+    }); 
+    
+    
+    
   }
 
-  private atualizarCartoes(): void {
-    const contasCartao = this.cartoesApi.filter(cartao => this.cartaoEstaAtivo(cartao));
+ // private atualizarCartoes(): void {
+ //   const contasCartao = this.cartoesApi.filter(cartao => this.cartaoEstaAtivo(cartao));
 
     
     /*this.cartoes = contasCartao.map((cartao, index) => {
@@ -312,7 +372,7 @@ export class CartaoDeCreditoComponent implements OnInit, OnDestroy {
         .reduce((total, l) => total + l.valor, 0);
       return { ...cartao, banco, limite: cartao.limite || 5000 + index * 2500, utilizado };
     });*/
-  }
+  //}
 
   private cartaoEstaAtivo(conta: Pick<Cartao, 'dataAbertura' | 'dataFechamento'>): boolean {
     const hoje = this.formatarData(new Date());

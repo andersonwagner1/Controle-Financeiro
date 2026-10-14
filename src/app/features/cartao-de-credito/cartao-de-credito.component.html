@@ -39,15 +39,15 @@
     <div class="filter-bar card-filters">
       <div class="filter-field">
         <label for="data-inicial">Data inicial</label>
-        <input id="data-inicial" class="filter-select" type="date" [(ngModel)]="dataInicial" (change)="carregarLancamentosPorPeriodo()">
+        <input id="data-inicial" class="filter-select" type="date" [(ngModel)]="dataInicial" (change)="atualizarInformacoesDaTela()">
       </div>
       <div class="filter-field">
         <label for="data-final">Data final</label>
-        <input id="data-final" class="filter-select" type="date" [(ngModel)]="dataFinal" (change)="carregarLancamentosPorPeriodo()">
+        <input id="data-final" class="filter-select" type="date" [(ngModel)]="dataFinal" (change)="atualizarInformacoesDaTela()">
       </div>
       <div class="filter-field filter-field-card">
         <label for="cartao">Cartão (banco)</label>
-        <select id="cartao" class="filter-select" [(ngModel)]="filtroBanco" (change)="carregarLancamentosPorPeriodo()">
+        <select id="cartao" class="filter-select" [(ngModel)]="filtroBanco" (change)="atualizarInformacoesDaTela()">
           <option value="todos">Todos os cartões</option>
           <option *ngFor="let cartaoCredito of cartoesCredito" [value]="cartaoCredito.id">{{ cartaoCredito.nome }}</option>
         </select>
@@ -63,13 +63,13 @@
       </div>
       <div class="summary-card highlight">
         <span class="summary-label">Fatura atual</span>
-        <strong>{{ valorFaturaAtual | currencyBr }}</strong>
+        <strong>{{ faturaAtual | currencyBr }}</strong>
         <span class="summary-detail">Fecha em {{ proximoFechamento | date:'dd/MM' }}</span>
       </div>
       <div class="summary-card">
         <span class="summary-label">Limite disponível</span>
-        <strong>{{ disponivelTotal | currencyBr }}</strong>
-        <span class="summary-detail">{{ limiteTotal ? (utilizadoTotal / limiteTotal * 100 | number:'1.0-0') : 0 }}% utilizado</span>
+        <strong>{{ limiteDisponivel | currencyBr }}</strong>
+        <span class="summary-detail">{{ limiteTotal ? (pagamentoAnterior / limiteTotal * 100 | number:'1.0-0') : 0 }}% utilizado</span>
       </div>
     </div>
 
@@ -77,7 +77,7 @@
       <div class="modal-box" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div>
-            <h3>Lançar compra no cartão</h3>
+            <h3>{{ isEditandoLancamento ? 'Editar movimentação do cartão' : 'Lançar compra no cartão' }}</h3>
             <p class="modal-subtitle">A data da compra fica registrada na observação. As parcelas usam datas mensais para os filtros.</p>
           </div>
           <button class="modal-close" type="button" (click)="fecharModal()" aria-label="Fechar">×</button>
@@ -85,7 +85,7 @@
 
         <form class="modal-form" [formGroup]="form" (ngSubmit)="salvarLancamentoCartao()">
           <div class="form-group">
-            <label class="form-label" for="modal-cartao">Cartão (banco) *</label>
+            <label class="form-label" for="modal-cartao">Cartão (banco)</label>
             <select id="modal-cartao" class="form-control" formControlName="cartaoCreditoId">
               <option value="">Selecione o cartão</option>
               <option *ngFor="let cartao of cartoesCredito" [value]="cartao.id">{{ cartao.nome }}</option>
@@ -121,9 +121,10 @@
             <textarea id="observacao-compra" class="form-control" rows="3" formControlName="descricao" placeholder="Ex: compra para a casa"></textarea>
           </div>
 
+          <p class="error-hint" *ngIf="erroLancamento">{{ erroLancamento }}</p>
           <div class="modal-footer">
             <button class="btn btn-ghost" type="button" (click)="fecharModal()">Cancelar</button>
-            <button class="btn btn-primary" type="submit" [disabled]="form.invalid">Salvar compra</button>
+            <button class="btn btn-primary" type="submit" [disabled]="form.invalid">{{ isEditandoLancamento ? 'Salvar alterações' : 'Salvar compra' }}</button>
           </div>
         </form>
       </div>
@@ -132,25 +133,26 @@
     <section class="payment-grid">
       <article class="payment-card previous">
         <div class="payment-icon">✓</div>
-        <div><span>Pagamento anterior</span><strong>{{ valorPagamentoAnterior | currencyBr }}</strong><small>Período encerrado</small></div>
+        <div><span>Pagamento anterior</span><strong>{{ pagamentoAnterior | currencyBr }}</strong><small>Período encerrado</small></div>
       </article>
       <article class="payment-card current">
         <div class="payment-icon">◷</div>
-        <div><span>Fatura atual</span><strong>{{ valorFaturaAtual | currencyBr }}</strong><small>Vence após o fechamento de {{ proximoFechamento | date:'dd/MM' }}</small></div>
+        <div><span>Fatura atual</span><strong>{{ faturaAtual | currencyBr }}</strong><small>Vence após o fechamento de {{ proximoFechamento | date:'dd/MM' }}</small></div>
       </article>
       <article class="payment-card future">
         <div class="payment-icon">→</div>
-        <div><span>Pagamentos futuros</span><strong>{{ valorPagamentosFuturos | currencyBr }}</strong><small>Após o próximo fechamento</small></div>
+        <div><span>Pagamentos futuros</span><strong>{{ pagamentoFuturo | currencyBr }}</strong><small>Após o próximo fechamento</small></div>
       </article>
     </section>
 
     <div class="content-heading">
       <div><h2>Movimentações dos cartões</h2><p>{{ movimentacoes.length }} lançamento(s) no período filtrado</p></div>
     </div>
+    <p class="error-hint" *ngIf="erroLancamento">{{ erroLancamento }}</p>
     <div class="card table-card">
       <div class="table-container">
         <table class="data-table">
-          <thead><tr><th>Data</th><th>Cartão / Banco</th><th>Descrição</th><th>Tipo de Movimentação</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead>
+          <thead><tr><th>Data</th><th>Cartão / Banco</th><th>Descrição</th><th>Tipo de Movimentação</th><th style="text-align:right">Valor</th><th>Status</th><th>Ações</th></tr></thead>
           <tbody>
             <tr *ngFor="let movimento of movimentacoes">
               <td class="text-secondary">{{ movimento.data | date:'dd/MM/yyyy' }}</td>
@@ -159,12 +161,32 @@
               <td><span class="category-chip">{{ movimento.tipoMovimentacao }}</span></td>
               <td class="movement-value" [class.credit]="movimento.tipo === 'credito'">{{ movimento.tipo === 'credito' ? '+' : '-' }}{{ movimento.valor | currencyBr }}</td>
               <td><span class="status-pill" [class.payment]="movimento.tipo === 'credito'">{{ movimento.tipo === 'credito' ? 'Pagamento/estorno' : 'Compra' }}</span></td>
+              <td>
+                <div style="display:flex;justify-content:center;gap:0.35rem">
+                  <button class="btn btn-ghost btn-sm" type="button" (click)="editarLancamento(movimento)" title="Editar movimentação" aria-label="Editar movimentação">Editar</button>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--danger)" type="button" (click)="excluirLancamento(movimento)" title="Excluir movimentação" aria-label="Excluir movimentação">Excluir</button>
+                </div>
+              </td>
             </tr>
-            <tr *ngIf="movimentacoes.length === 0"><td colspan="6" class="empty-state">Nenhuma movimentação encontrada para os filtros selecionados.</td></tr>
+            <tr *ngIf="movimentacoes.length === 0"><td colspan="7" class="empty-state">Nenhuma movimentação encontrada para os filtros selecionados.</td></tr>
           </tbody>
         </table>
       </div>
     </div>
+</div>
+
+<div class="modal-overlay" *ngIf="showConfirmacaoExclusao" (click)="cancelarExclusao()">
+  <div class="modal-box delete-confirmation" role="dialog" aria-modal="true" aria-labelledby="titulo-exclusao-movimentacao" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="titulo-exclusao-movimentacao">Excluir movimentação?</h3>
+      <button class="modal-close" type="button" (click)="cancelarExclusao()" aria-label="Fechar">×</button>
+    </div>
+    <p class="delete-confirmation-text">Deseja realmente excluir <strong>{{ lancamentoParaExcluir?.descricao || lancamentoParaExcluir?.tipoMovimentacao }}</strong>?</p>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" type="button" (click)="cancelarExclusao()">Cancelar</button>
+      <button class="btn btn-danger" type="button" (click)="confirmarExclusao()">Excluir</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" *ngIf="showCadastroCartao" (click)="fecharCadastroCartao()">

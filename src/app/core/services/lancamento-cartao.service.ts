@@ -10,6 +10,20 @@ export class LancamentoCartaoService {
 
   constructor(private http: HttpClient) {}
 
+
+  detalhesCartaoPorPeriodo(cartaoCreditoId: string, dataInicio: string, dataFim: string): Observable<any> {
+    if (!dataInicio || !dataFim) {
+      throw new Error('dataInicio e dataFim são obrigatórios para consultar lançamentos do cartão.');
+    }
+
+    const params = new HttpParams()
+      .set('dataInicio', dataInicio)
+      .set('dataFim', dataFim)
+      .set('contaId', cartaoCreditoId)
+
+    return this.http.get<LancamentoCartao[]>(this.apiUrl + "/detalhes", { params })      
+  }
+
   buscarMovimentacaoPorPeriodo(cartaoCreditoId: number, dataInicio: string, dataFim: string): Observable<LancamentoCartao[]> {
     if (!dataInicio || !dataFim) {
       throw new Error('dataInicio e dataFim são obrigatórios para consultar lançamentos do cartão.');
@@ -21,7 +35,7 @@ export class LancamentoCartaoService {
       .set('contaId', cartaoCreditoId)
       .set('sort', 'data,desc');
 
-    return this.http.get<LancamentoCartao[]>(this.apiUrl, { params })      
+    return this.http.get<LancamentoCartao[]>(this.apiUrl + "/lancamentos", { params })      
   }
 
   buscarPeriodoDashboard(dataInicio: string, dataFim: string): Observable<LancamentoCartao[]> {
@@ -33,11 +47,17 @@ export class LancamentoCartaoService {
     return this.http.get<LancamentoCartao[]>(this.apiUrl, { params });
   }
 
-  adicionarLancamento(lancamento: Omit<LancamentoCartao, 'id'>): Observable<LancamentoCartao> {
-    console.log('Adicionando lançamento:', lancamento);
-
+  adicionarLancamento(lancamento: LancamentoCartao): Observable<LancamentoCartao> {
     return this.http.post<LancamentoCartao>(this.apiUrl, lancamento).pipe(
       tap(salvo => this.lancamentos$.next([salvo, ...this.lancamentos$.getValue()]))
     );
+  }
+
+  atualizarLancamento(lancamento: LancamentoCartao): Observable<LancamentoCartao> {
+    return this.http.put<LancamentoCartao>(`${this.apiUrl}/${lancamento.id}`, lancamento);
+  }
+
+  removerLancamento(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`);
   }
 }
